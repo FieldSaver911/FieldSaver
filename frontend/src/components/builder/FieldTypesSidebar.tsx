@@ -6,11 +6,17 @@ import { FIELD_TYPES } from '../../constants/fieldTypes';
 
 export interface FieldTypesSidebarProps {
   onAddField: (type: Field['type']) => void;
+  onPaletteDragStart: (type: Field['type']) => void;
+  onPaletteDragEnd: () => void;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function FieldTypesSidebar({ onAddField }: FieldTypesSidebarProps) {
+export function FieldTypesSidebar({
+  onAddField,
+  onPaletteDragStart,
+  onPaletteDragEnd,
+}: FieldTypesSidebarProps) {
   const categories = ['basic', 'choice', 'advanced', 'layout'] as const;
   const catLabels: Record<string, string> = {
     basic: 'BASIC',
@@ -42,7 +48,10 @@ export function FieldTypesSidebar({ onAddField }: FieldTypesSidebarProps) {
       {/* Header */}
       <div
         style={{
-          padding: `${V.s4} ${V.s3}`,
+          height: '52px',
+          padding: `0 ${V.s3}`,
+          display: 'flex',
+          alignItems: 'center',
           borderBottom: `1px solid ${V.borderLight}`,
           flexShrink: 0,
         }}
@@ -103,7 +112,14 @@ export function FieldTypesSidebar({ onAddField }: FieldTypesSidebarProps) {
               <button
                 key={fieldType.type}
                 type="button"
+                draggable
                 onClick={() => onAddField(fieldType.type)}
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('application/x-fieldsaver-palette-type', fieldType.type);
+                  e.dataTransfer.effectAllowed = 'copy';
+                  onPaletteDragStart(fieldType.type);
+                }}
+                onDragEnd={() => onPaletteDragEnd()}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -115,7 +131,7 @@ export function FieldTypesSidebar({ onAddField }: FieldTypesSidebarProps) {
                   borderRadius: V.r2,
                   backgroundColor: V.bgApp,
                   color: V.textPrimary,
-                  cursor: 'pointer',
+                  cursor: 'grab',
                   fontSize: V.sm,
                   fontFamily: V.font,
                   transition: 'all 0.12s',
@@ -129,7 +145,7 @@ export function FieldTypesSidebar({ onAddField }: FieldTypesSidebarProps) {
                   e.currentTarget.style.backgroundColor = V.bgApp;
                   e.currentTarget.style.borderColor = V.borderLight;
                 }}
-                title={`Add ${fieldType.label} field`}
+                title={`Add ${fieldType.label} field or drag to place in column`}
               >
                 {/* Icon */}
                 <div

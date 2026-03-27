@@ -19,6 +19,13 @@ interface ColumnDrag {
   span: number;
 }
 
+// ─── Palette drag tracking (module-level signal) ────────────────────────────────
+let paletteDragActive = false;
+export function setPaletteDragActive(active: boolean): void {
+  paletteDragActive = active;
+}
+const PALETTE_KEY = 'application/x-fieldsaver-palette-type';
+
 // ─── SVG Icons ────────────────────────────────────────────────────────────────
 
 function IconGrid() {
@@ -94,23 +101,37 @@ interface FieldDropZoneProps {
   cellId: string;
   index: number;
   onDrop: (targetCellId: string, targetIndex: number) => void;
+  onPaletteDrop: (cellId: string, index: number, type: Field['type']) => void;
   dragState: DragState | null;
 }
 
-function FieldDropZone({ cellId, index, onDrop, dragState }: FieldDropZoneProps) {
+function FieldDropZone({ cellId, index, onDrop, onPaletteDrop, dragState }: FieldDropZoneProps) {
   const [isOver, setIsOver] = React.useState(false);
 
-  if (!dragState) return null;
+  const isActive = !!dragState || paletteDragActive;
+  const isSuppressed = !!dragState &&
+    dragState.sourceCellId === cellId &&
+    Math.abs(dragState.sourceIndex - index) <= 1;
 
-  if (dragState.sourceCellId === cellId && Math.abs(dragState.sourceIndex - index) <= 1) {
-    return null;
+  if (!isActive || isSuppressed) {
+    return <div style={{ height: '4px' }} />;
   }
 
   return (
     <div
       onDragOver={(e) => { e.preventDefault(); setIsOver(true); }}
       onDragLeave={() => setIsOver(false)}
-      onDrop={(e) => { e.preventDefault(); setIsOver(false); onDrop(cellId, index); }}
+      onDrop={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsOver(false);
+        const paletteType = e.dataTransfer.getData(PALETTE_KEY) as Field['type'] | '';
+        if (paletteType) {
+          onPaletteDrop(cellId, index, paletteType);
+        } else {
+          onDrop(cellId, index);
+        }
+      }}
       style={{
         height: isOver ? '32px' : '4px',
         borderRadius: V.r2,
@@ -133,6 +154,7 @@ interface CellViewProps {
   onSelectField: (id: string) => void;
   onDeleteField: (id: string) => void;
   onDropField: (toCellId: string, toIndex: number) => void;
+  onPaletteDropToCell: (cellId: string, index: number, type: Field['type']) => void;
   onDeleteCell: () => void;
   dragState: DragState | null;
   onDragStartField: (cellId: string, index: number) => void;
@@ -150,6 +172,7 @@ function CellView({
   onSelectField,
   onDeleteField,
   onDropField,
+  onPaletteDropToCell,
   onDeleteCell,
   dragState,
   onDragStartField,
@@ -169,7 +192,12 @@ function CellView({
   const handleCellDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsOver(false);
-    onDropField(cell.id, cell.fields.length);
+    const paletteType = e.dataTransfer.getData(PALETTE_KEY) as Field['type'] | '';
+    if (paletteType) {
+      onPaletteDropToCell(cell.id, cell.fields.length, paletteType);
+    } else {
+      onDropField(cell.id, cell.fields.length);
+    }
   };
 
   const handleColumnDragStart = (e: React.MouseEvent) => {
@@ -416,6 +444,7 @@ function CellView({
               cellId={cell.id}
               index={idx}
               onDrop={onDropField}
+              onPaletteDrop={onPaletteDropToCell}
               dragState={dragState}
             />
             <FieldCard
@@ -435,6 +464,7 @@ function CellView({
             cellId={cell.id}
             index={cell.fields.length}
             onDrop={onDropField}
+            onPaletteDrop={onPaletteDropToCell}
             dragState={dragState}
           />
         )}
@@ -453,6 +483,11 @@ interface RowViewProps {
   onDeleteRow: (rowId: string) => void;
   onMoveField: (fromCellId: string, fromIdx: number, toCellId: string, toIdx: number) => void;
   onUpdateRow: (rowId: string, patch: Partial<Row>) => void;
+  onAddFieldToCell: (type: Field['type'], cellId: string, insertBeforeIndex: number) => void;
+  dragState: DragState | null;
+  onCanvasDragStart: (cellId: string, index: number) => void;
+  onCanvasDrop: (toCellId: string, toIndex: number) => void;
+  onCanvasDragEnd: () => void;
   onColumnDragStart?: (payload: ColumnDrag) => void;
   onColumnDropToSection?: (pageId: string, secId: string) => void;
 }
@@ -465,10 +500,14 @@ function RowView({
   onDeleteRow,
   onMoveField,
   onUpdateRow,
+  onAddFieldToCell,
+  dragState,
+  onCanvasDragStart,
+  onCanvasDrop,
+  onCanvasDragEnd,
   onColumnDragStart,
   onColumnDropToSection,
 }: RowViewProps) {
-  const [dragState, setDragState] = React.useState<DragState | null>(null);
   const [showLayoutPicker, setShowLayoutPicker] = React.useState(false);
   const [addColHovered, setAddColHovered] = React.useState(false);
   const [delRowHovered, setDelRowHovered] = React.useState(false);
@@ -496,17 +535,19 @@ function RowView({
   const totalCols = liveCols.reduce((a, b) => a + b, 0);
 
   const handleDragStart = (cellId: string, index: number) => {
-    setDragState({ sourceCellId: cellId, sourceIndex: index });
+    onCanvasDragStart(cellId, index);
   };
 
   const handleDrop = (toCellId: string, toIndex: number) => {
-    if (!dragState) return;
-    onMoveField(dragState.sourceCellId, dragState.sourceIndex, toCellId, toIndex);
-    setDragState(null);
+    onCanvasDrop(toCellId, toIndex);
   };
 
   const handleDragEnd = () => {
-    setDragState(null);
+    onCanvasDragEnd();
+  };
+
+  const handlePaletteDropToCell = (cellId: string, index: number, type: Field['type']) => {
+    onAddFieldToCell(type, cellId, index);
   };
 
   // Delete a cell by index — remap preset cols and rebuild cells list
@@ -771,6 +812,7 @@ function RowView({
                 onSelectField={onSelectField}
                 onDeleteField={onDeleteField}
                 onDropField={handleDrop}
+                onPaletteDropToCell={handlePaletteDropToCell}
                 onDeleteCell={() => handleDeleteCell(idx)}
                 dragState={dragState}
                 onDragStartField={handleDragStart}
@@ -859,8 +901,13 @@ interface SectionViewProps {
   onMoveField: (fromCellId: string, fromIdx: number, toCellId: string, toIdx: number) => void;
   onDeleteSection: (secId: string) => void;
   onAddRow: (preset: ColPreset) => void;
+  onAddFieldToCell: (type: Field['type'], cellId: string, insertBeforeIndex: number) => void;
   onUpdateSection: (secId: string, patch: Partial<Section>) => void;
   onUpdateRow: (rowId: string, patch: Partial<Row>) => void;
+  dragState: DragState | null;
+  onCanvasDragStart: (cellId: string, index: number) => void;
+  onCanvasDrop: (toCellId: string, toIndex: number) => void;
+  onCanvasDragEnd: () => void;
   onColumnDragStart?: (payload: ColumnDrag) => void;
   onColumnDropToSection?: (pageId: string, secId: string) => void;
 }
@@ -876,8 +923,13 @@ function SectionView({
   onMoveField,
   onDeleteSection,
   onAddRow,
+  onAddFieldToCell,
   onUpdateSection,
   onUpdateRow,
+  dragState,
+  onCanvasDragStart,
+  onCanvasDrop,
+  onCanvasDragEnd,
   onColumnDragStart,
   onColumnDropToSection,
 }: SectionViewProps) {
@@ -1045,6 +1097,11 @@ function SectionView({
               onDeleteRow={onDeleteRow}
               onMoveField={onMoveField}
               onUpdateRow={onUpdateRow}
+              onAddFieldToCell={onAddFieldToCell}
+              dragState={dragState}
+              onCanvasDragStart={onCanvasDragStart}
+              onCanvasDrop={onCanvasDrop}
+              onCanvasDragEnd={onCanvasDragEnd}
               onColumnDragStart={onColumnDragStart}
               onColumnDropToSection={onColumnDropToSection}
             />
@@ -1165,6 +1222,7 @@ export interface CanvasProps {
   onMoveField: (fromCellId: string, fromIdx: number, toCellId: string, toIdx: number) => void;
   onDeleteSection: (secId: string) => void;
   onAddRow: (preset: ColPreset) => void;
+  onAddFieldToCell: (type: Field['type'], cellId: string, insertBeforeIndex: number) => void;
   onUpdateSection: (secId: string, patch: Partial<Section>) => void;
   onUpdateRow: (rowId: string, patch: Partial<Row>) => void;
   onAddSection: () => void;
@@ -1185,6 +1243,7 @@ export function Canvas({
   onMoveField,
   onDeleteSection,
   onAddRow,
+  onAddFieldToCell,
   onUpdateSection,
   onUpdateRow,
   onAddSection,
@@ -1196,6 +1255,24 @@ export function Canvas({
   onColumnDropToSection,
 }: CanvasProps) {
   const [addSectionHovered, setAddSectionHovered] = React.useState(false);
+  const [dragState, setDragState] = React.useState<DragState | null>(null);
+
+  const handleCanvasDragStart = React.useCallback((cellId: string, index: number) => {
+    setDragState({ sourceCellId: cellId, sourceIndex: index });
+  }, []);
+
+  const handleCanvasDrop = React.useCallback(
+    (toCellId: string, toIndex: number) => {
+      if (!dragState) return;
+      onMoveField(dragState.sourceCellId, dragState.sourceIndex, toCellId, toIndex);
+      setDragState(null);
+    },
+    [dragState, onMoveField],
+  );
+
+  const handleCanvasDragEnd = React.useCallback(() => {
+    setDragState(null);
+  }, []);
 
   if (!activePage) {
     return (
@@ -1220,75 +1297,87 @@ export function Canvas({
     <div
       style={{
         flex: 1,
-        overflowY: 'auto',
-        padding: `${V.s5} ${V.s6}`,
+        display: 'flex',
+        flexDirection: 'column',
         backgroundColor: V.bgApp,
       }}
       onClick={() => onSelectField('')}
     >
+      {/* Canvas toolbar header */}
       <div
         style={{
-          maxWidth: '1000px',
-          margin: '0 auto',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          height: '52px',
+          paddingLeft: V.s3,
+          paddingRight: V.s3,
+          borderBottom: `1px solid ${V.borderLight}`,
+          flexShrink: 0,
+          backgroundColor: V.bgSurface,
         }}
+        onClick={(e) => e.stopPropagation()}
       >
-        {/* Canvas toolbar */}
+        {/* Page label */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
-            paddingBottom: V.s4,
-            marginBottom: V.s4,
-            borderBottom: `1px solid ${V.borderLight}`,
+            gap: V.s2,
+            fontSize: V.md,
+            fontFamily: V.font,
+            color: V.textSecondary,
           }}
-          onClick={(e) => e.stopPropagation()}
         >
-          {/* Page label */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: V.s2,
-              fontSize: V.md,
-              fontFamily: V.font,
-              color: V.textSecondary,
-            }}
-          >
-            <span style={{ color: V.textDisabled, fontWeight: 400 }}>Page</span>
-            <span style={{ color: V.textDisabled }}>/</span>
-            <span style={{ fontWeight: 600, color: V.textPrimary }}>Sections</span>
-          </div>
-
-          {/* Add section */}
-          <button
-            type="button"
-            onClick={onAddSection}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: V.s1,
-              padding: `${V.s2} ${V.s3}`,
-              border: `1.5px dashed ${addSectionHovered ? V.primary : V.border}`,
-              borderRadius: V.r3,
-              backgroundColor: addSectionHovered ? V.bgHighlight : 'transparent',
-              color: addSectionHovered ? V.primary : V.textSecondary,
-              cursor: 'pointer',
-              fontSize: V.sm,
-              fontFamily: V.font,
-              fontWeight: 500,
-              transition: 'all 0.12s',
-            }}
-            onMouseEnter={() => setAddSectionHovered(true)}
-            onMouseLeave={() => setAddSectionHovered(false)}
-            title="Add section"
-          >
-            <IconPlus />
-            Add Section
-          </button>
+          <span style={{ color: V.textDisabled, fontWeight: 400 }}>Page</span>
+          <span style={{ color: V.textDisabled }}>/</span>
+          <span style={{ fontWeight: 600, color: V.textPrimary }}>Sections</span>
         </div>
 
-        {/* Sections */}
+        {/* Add section */}
+        <button
+          type="button"
+          onClick={onAddSection}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: V.s1,
+            padding: `${V.s2} ${V.s4}`,
+            border: `1.5px dashed ${addSectionHovered ? V.primary : V.border}`,
+            borderRadius: V.r3,
+            backgroundColor: addSectionHovered ? V.bgHighlight : 'transparent',
+            color: addSectionHovered ? V.primary : V.textSecondary,
+            cursor: 'pointer',
+            fontSize: V.sm,
+            fontFamily: V.font,
+            fontWeight: 500,
+            transition: 'all 0.12s',
+            height: 'fit-content',
+          }}
+          onMouseEnter={() => setAddSectionHovered(true)}
+          onMouseLeave={() => setAddSectionHovered(false)}
+          title="Add section"
+        >
+          <IconPlus />
+          Add Section
+        </button>
+      </div>
+
+      {/* Content area */}
+      <div
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: `${V.s5} ${V.s6}`,
+        }}
+      >
+        <div
+          style={{
+            maxWidth: '1000px',
+            margin: '0 auto',
+          }}
+        >
+          {/* Sections */}
         {activePage.sections.length === 0 ? (
           <div
             style={{
@@ -1332,14 +1421,20 @@ export function Canvas({
               onMoveField={onMoveField}
               onDeleteSection={onDeleteSection}
               onAddRow={onAddRow}
+              onAddFieldToCell={onAddFieldToCell}
               onUpdateSection={onUpdateSection}
               onUpdateRow={onUpdateRow}
+              dragState={dragState}
+              onCanvasDragStart={handleCanvasDragStart}
+              onCanvasDrop={handleCanvasDrop}
+              onCanvasDragEnd={handleCanvasDragEnd}
               onColumnDragStart={onColumnDragStart}
               onColumnDropToSection={onColumnDropToSection}
             />
           ))
         )}
       </div>
+    </div>
     </div>
   );
 }

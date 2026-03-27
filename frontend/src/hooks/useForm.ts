@@ -30,6 +30,7 @@ export interface UseFormReturn {
 
   // Field mutations
   addField: (type: Field['type']) => void;
+  addFieldToCell: (type: Field['type'], cellId: string, insertBeforeIndex: number) => void;
   updateField: (fieldId: string, patch: Partial<Field>) => void;
   deleteField: (fieldId: string) => void;
   moveField: (fromCellId: string, fromIdx: number, toCellId: string, toIdx: number) => void;
@@ -182,6 +183,29 @@ export function useForm(formId: string): UseFormReturn {
       patchSection(activePId, activeSId, {
         rows: [...section.rows, newRow],
       });
+    },
+    [activePId, activeSId, form, patchSection],
+  );
+
+  const addFieldToCell = React.useCallback(
+    (type: Field['type'], cellId: string, insertBeforeIndex: number): void => {
+      if (!activePId || !activeSId || !form) return;
+      const page = form.data.pages.find((p) => p.id === activePId);
+      if (!page) return;
+      const section = page.sections.find((s) => s.id === activeSId);
+      if (!section) return;
+
+      const newField = makeField(type);
+      const newRows: Row[] = section.rows.map((row) => ({
+        ...row,
+        cells: row.cells.map((cell) => {
+          if (cell.id !== cellId) return cell;
+          const fields = [...cell.fields];
+          fields.splice(insertBeforeIndex, 0, newField);
+          return { ...cell, fields };
+        }),
+      }));
+      patchSection(activePId, activeSId, { rows: newRows });
     },
     [activePId, activeSId, form, patchSection],
   );
@@ -360,6 +384,7 @@ export function useForm(formId: string): UseFormReturn {
     selectedField,
 
     addField,
+    addFieldToCell,
     updateField,
     deleteField,
     moveField,

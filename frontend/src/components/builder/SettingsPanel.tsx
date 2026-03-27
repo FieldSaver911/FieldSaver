@@ -863,7 +863,9 @@ export function SettingsPanel({
       {/* Tab bar with collapse button */}
       <div
         style={{
+          height: '52px',
           display: 'flex',
+          alignItems: 'center',
           borderBottom: `1px solid ${V.borderLight}`,
           flexShrink: 0,
         }}
@@ -875,7 +877,7 @@ export function SettingsPanel({
             onClick={() => setActiveTab(tab.id)}
             style={{
               flex: 1,
-              padding: `${V.s3} ${V.s2}`,
+              padding: `0 ${V.s2}`,
               border: 'none',
               borderBottom: activeTab === tab.id ? `2px solid ${V.primary}` : '2px solid transparent',
               backgroundColor: 'transparent',
@@ -885,6 +887,10 @@ export function SettingsPanel({
               cursor: 'pointer',
               fontFamily: V.font,
               transition: 'color 0.12s, border-color 0.12s',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
             }}
           >
             {tab.label}
@@ -895,9 +901,9 @@ export function SettingsPanel({
           onClick={() => setCollapsed(true)}
           title="Collapse"
           style={{
-            width: '36px',
-            height: 'auto',
-            padding: `${V.s3} ${V.s2}`,
+            width: '52px',
+            height: '100%',
+            padding: 0,
             border: 'none',
             borderBottom: '2px solid transparent',
             backgroundColor: 'transparent',
@@ -906,6 +912,9 @@ export function SettingsPanel({
             cursor: 'pointer',
             fontFamily: V.font,
             transition: 'color 0.12s',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
           ▶

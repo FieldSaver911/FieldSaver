@@ -425,7 +425,8 @@ export function Sidebar({
       {/* Header */}
       <div
         style={{
-          padding: `${V.s4} ${V.s3} ${V.s2}`,
+          height: '52px',
+          padding: `0 ${V.s3}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',

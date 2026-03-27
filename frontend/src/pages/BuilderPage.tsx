@@ -4,7 +4,7 @@ import type { ColPreset, Field, Page, Row, Section } from '@fieldsaver/shared';
 import { V } from '../constants/design';
 import { Sidebar } from '../components/builder/Sidebar';
 import { FieldTypesSidebar } from '../components/builder/FieldTypesSidebar';
-import { Canvas } from '../components/builder/Canvas';
+import { Canvas, setPaletteDragActive } from '../components/builder/Canvas';
 import { SettingsPanel } from '../components/builder/SettingsPanel';
 import { PreviewModal } from '../components/preview/PreviewModal';
 import { useForm } from '../hooks/useForm';
@@ -439,6 +439,7 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
     activeSection,
     selectedField,
     addField,
+    addFieldToCell,
     updateField,
     deleteField,
     moveField,
@@ -549,6 +550,17 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
     },
     [setSelectedField],
   );
+
+  const handlePaletteDragStart = React.useCallback(
+    (_type: Field['type']) => {
+      setPaletteDragActive(true);
+    },
+    [],
+  );
+
+  const handlePaletteDragEnd = React.useCallback(() => {
+    setPaletteDragActive(false);
+  }, []);
 
   const handleDeleteField = React.useCallback(
     (fieldId: string) => {
@@ -697,7 +709,11 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
         />
 
         {/* Center-Left: Field Types Sidebar */}
-        <FieldTypesSidebar onAddField={addField} />
+        <FieldTypesSidebar
+          onAddField={addField}
+          onPaletteDragStart={handlePaletteDragStart}
+          onPaletteDragEnd={handlePaletteDragEnd}
+        />
 
         {/* Center: Canvas */}
         <Canvas
@@ -712,6 +728,7 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
           onMoveField={moveField}
           onDeleteSection={handleDeleteSectionCb}
           onAddRow={handleAddRowForActiveSection}
+          onAddFieldToCell={addFieldToCell}
           onUpdateSection={handleUpdateSectionCb}
           onUpdateRow={handleUpdateRowCb}
           onAddSection={addSection}
