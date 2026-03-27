@@ -40,6 +40,7 @@ function makeUseFormReturn(overrides: Partial<UseFormReturn> = {}): UseFormRetur
     activeSection: section,
     selectedField: null,
     addField: vi.fn(),
+    addFieldToCell: vi.fn(),
     updateField: vi.fn(),
     deleteField: vi.fn(),
     moveField: vi.fn(),

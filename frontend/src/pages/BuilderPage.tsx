@@ -470,7 +470,6 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
     isLoading,
     loadError,
     formName,
-    formStatus,
     activePId,
     activeSId,
     selectedFieldId,
@@ -554,9 +553,9 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
     [activeSId, activePId, updateSection],
   );
 
-  const handleAddRowForActiveSection = React.useCallback(
-    (preset: ColPreset) => {
-      addRow(preset);
+  const handleAddRow = React.useCallback(
+    (secId: string, preset: ColPreset) => {
+      addRow(secId, preset);
     },
     [addRow],
   );
@@ -576,9 +575,13 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
   );
 
   const handleUpdateRowCb = React.useCallback(
-    (rowId: string, patch: Partial<Row>) => {
-      if (!activeSId || !activeSection) return;
-      const updatedRows = activeSection.rows.map((row) => {
+    (secId: string, rowId: string, patch: Partial<Row>) => {
+      if (!activePId) return;
+      const page = pages.find((p) => p.id === activePId);
+      if (!page) return;
+      const section = page.sections.find((s) => s.id === secId);
+      if (!section) return;
+      const updatedRows = section.rows.map((row) => {
         if (row.id !== rowId) return row;
 
         // When preset changes, rebuild cells to match new column count
@@ -591,9 +594,9 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
 
         return { ...row, ...patch };
       });
-      updateSection(activeSId, { rows: updatedRows });
+      updateSection(secId, { rows: updatedRows });
     },
-    [activeSId, activeSection, updateSection],
+    [activePId, pages, updateSection],
   );
 
   // Select first section when changing to a new section
@@ -787,7 +790,7 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
           onDeleteRow={deleteRow}
           onMoveField={moveField}
           onDeleteSection={handleDeleteSectionCb}
-          onAddRow={handleAddRowForActiveSection}
+          onAddRow={handleAddRow}
           onAddFieldToCell={addFieldToCell}
           onUpdateSection={handleUpdateSectionCb}
           onUpdateRow={handleUpdateRowCb}

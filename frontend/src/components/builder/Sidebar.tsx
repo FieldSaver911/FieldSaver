@@ -1,7 +1,7 @@
 import React from 'react';
 import type { Page, Section } from '@fieldsaver/shared';
 import { V } from '../../constants/design';
-import { SectionSettingsDrawer } from './SectionSettingsDrawer';
+import { SidebarCollapseIcon } from '../icons/SidebarCollapseIcon';
 
 // ─── Drag types ───────────────────────────────────────────────────────────────
 
@@ -20,13 +20,11 @@ interface SectionItemProps {
   isActive: boolean;
   onSelect: (secId: string) => void;
   onDelete: (secId: string) => void;
-  onUpdateSection: (secId: string, patch: Partial<Section>) => void;
   isDragActive?: boolean;
 }
 
-function SectionItem({ section, pageId, isActive, onSelect, onDelete, onUpdateSection, isDragActive }: SectionItemProps) {
+function SectionItem({ section, pageId, onSelect, onDelete, isDragActive }: SectionItemProps) {
   const [isHovered, setIsHovered] = React.useState(false);
-  const [showSettings, setShowSettings] = React.useState(false);
 
   const fieldCount = section.rows.reduce(
     (acc, row) => acc + row.cells.reduce((a, c) => a + c.fields.length, 0),
@@ -53,8 +51,6 @@ function SectionItem({ section, pageId, isActive, onSelect, onDelete, onUpdateSe
           ? isHovered
             ? 'rgba(0, 115, 234, 0.3)'
             : 'rgba(0, 115, 234, 0.1)'
-          : isActive
-          ? V.sidebarActive
           : isHovered
           ? V.sidebarHover
           : 'transparent',
@@ -78,7 +74,7 @@ function SectionItem({ section, pageId, isActive, onSelect, onDelete, onUpdateSe
         style={{
           flex: 1,
           fontSize: V.sm,
-          color: isActive ? V.sidebarText : V.sidebarMuted,
+          color: V.sidebarMuted,
           fontFamily: V.font,
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -100,57 +96,25 @@ function SectionItem({ section, pageId, isActive, onSelect, onDelete, onUpdateSe
       </span>
 
       {isHovered && (
-        <>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setShowSettings(true); }}
-            title="Section settings"
-            style={{
-              border: 'none',
-              background: 'transparent',
-              color: V.sidebarMuted,
-              cursor: 'pointer',
-              padding: 0,
-              fontSize: '14px',
-              lineHeight: 1,
-              display: 'flex',
-              alignItems: 'center',
-              flexShrink: 0,
-            }}
-          >
-            ⚙
-          </button>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onDelete(section.id); }}
-            title="Delete section"
-            style={{
-              border: 'none',
-              background: 'transparent',
-              color: V.sidebarMuted,
-              cursor: 'pointer',
-              padding: 0,
-              fontSize: '14px',
-              lineHeight: 1,
-              display: 'flex',
-              alignItems: 'center',
-              flexShrink: 0,
-            }}
-          >
-            ×
-          </button>
-        </>
-      )}
-
-      {showSettings && (
-        <SectionSettingsDrawer
-          settings={section.settings}
-          onUpdate={(settings) => {
-            onUpdateSection(section.id, { settings });
-            setShowSettings(false);
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onDelete(section.id); }}
+          title="Delete section"
+          style={{
+            border: 'none',
+            background: 'transparent',
+            color: V.sidebarMuted,
+            cursor: 'pointer',
+            padding: 0,
+            fontSize: '14px',
+            lineHeight: 1,
+            display: 'flex',
+            alignItems: 'center',
+            flexShrink: 0,
           }}
-          onClose={() => setShowSettings(false)}
-        />
+        >
+          ×
+        </button>
       )}
     </div>
   );
@@ -168,7 +132,6 @@ interface PageItemProps {
   onAddSection: (pageId: string) => void;
   onDeletePage: (pageId: string) => void;
   onRenamePage: (pageId: string, title: string) => void;
-  onUpdateSection: (secId: string, patch: Partial<Section>) => void;
   isOnlyPage: boolean;
   columnDrag?: ColumnDrag | null;
 }
@@ -183,7 +146,6 @@ function PageItem({
   onAddSection,
   onDeletePage,
   onRenamePage,
-  onUpdateSection,
   isOnlyPage,
   columnDrag,
 }: PageItemProps) {
@@ -241,12 +203,16 @@ function PageItem({
         {/* Expand/collapse arrow */}
         <span
           style={{
-            fontSize: '10px',
+            fontSize: '12px',
             color: V.sidebarMuted,
             transition: 'transform 0.15s',
-            display: 'inline-block',
-            transform: expanded ? 'rotate(0)' : 'rotate(-90deg)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)',
             flexShrink: 0,
+            width: '16px',
+            height: '16px',
           }}
         >
           ▾
@@ -331,7 +297,6 @@ function PageItem({
               isActive={activeSectionId === section.id}
               onSelect={onSelectSection}
               onDelete={(secId) => onDeleteSection(page.id, secId)}
-              onUpdateSection={onUpdateSection}
               isDragActive={!!columnDrag}
             />
           ))}
@@ -374,7 +339,6 @@ export interface SidebarProps {
   onRenamePage: (pageId: string, title: string) => void;
   onAddSection: (pageId: string) => void;
   onDeleteSection: (pageId: string, secId: string) => void;
-  onUpdateSection: (secId: string, patch: Partial<Section>) => void;
   columnDrag?: ColumnDrag | null;
 }
 
@@ -389,9 +353,51 @@ export function Sidebar({
   onRenamePage,
   onAddSection,
   onDeleteSection,
-  onUpdateSection,
   columnDrag,
 }: SidebarProps) {
+  const [collapsed, setCollapsed] = React.useState(false);
+
+  if (collapsed) {
+    return (
+      <div
+        style={{
+          width: '36px',
+          flexShrink: 0,
+          backgroundColor: V.sidebarBg,
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Expand button */}
+        <button
+          type="button"
+          onClick={() => setCollapsed(false)}
+          title="Expand Pages"
+          style={{
+            width: '36px',
+            height: '52px',
+            padding: 0,
+            border: 'none',
+            borderBottom: `1px solid ${V.sidebarBorder}`,
+            backgroundColor: 'transparent',
+            color: V.sidebarMuted,
+            cursor: 'pointer',
+            transition: 'all 0.12s',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = V.sidebarText; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = V.sidebarMuted; }}
+        >
+          <SidebarCollapseIcon collapsed size={18} color="currentColor" />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
@@ -446,24 +452,49 @@ export function Sidebar({
         >
           Pages
         </span>
-        <button
-          type="button"
-          onClick={onAddPage}
-          title="Add page"
-          style={{
-            border: 'none',
-            background: 'transparent',
-            color: V.sidebarMuted,
-            cursor: 'pointer',
-            fontSize: '16px',
-            padding: 0,
-            display: 'flex',
-            alignItems: 'center',
-            lineHeight: 1,
-          }}
-        >
-          +
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <button
+            type="button"
+            onClick={onAddPage}
+            title="Add page"
+            style={{
+              border: 'none',
+              background: 'transparent',
+              color: V.sidebarMuted,
+              cursor: 'pointer',
+              fontSize: '16px',
+              padding: 0,
+              display: 'flex',
+              alignItems: 'center',
+              lineHeight: 1,
+              transition: 'color 0.12s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = V.sidebarText; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = V.sidebarMuted; }}
+          >
+            +
+          </button>
+          <button
+            type="button"
+            onClick={() => setCollapsed(true)}
+            title="Collapse Pages"
+            style={{
+              border: 'none',
+              background: 'transparent',
+              color: V.sidebarMuted,
+              cursor: 'pointer',
+              padding: 0,
+              display: 'flex',
+              alignItems: 'center',
+              lineHeight: 1,
+              transition: 'color 0.12s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = V.sidebarText; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = V.sidebarMuted; }}
+          >
+            <SidebarCollapseIcon collapsed={false} size={16} color="currentColor" />
+          </button>
+        </div>
       </div>
 
       {/* Pages list */}
@@ -480,7 +511,6 @@ export function Sidebar({
             onAddSection={onAddSection}
             onDeletePage={onDeletePage}
             onRenamePage={onRenamePage}
-            onUpdateSection={onUpdateSection}
             isOnlyPage={pages.length === 1}
             columnDrag={columnDrag}
           />

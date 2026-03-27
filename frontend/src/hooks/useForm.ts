@@ -36,12 +36,12 @@ export interface UseFormReturn {
   moveField: (fromCellId: string, fromIdx: number, toCellId: string, toIdx: number) => void;
 
   // Row mutations
-  addRow: (preset: ColPreset) => void;
-  deleteRow: (rowId: string) => void;
+  addRow: (sectionId: string, preset: ColPreset) => void;
+  deleteRow: (sectionId: string, rowId: string) => void;
   setRows: (rows: Row[]) => void;
 
   // Section mutations
-  addSection: () => void;
+  addSection: (pageId?: string) => void;
   deleteSection: (secId: string) => void;
   updateSection: (secId: string, patch: Partial<Section>) => void;
 
@@ -306,38 +306,39 @@ export function useForm(formId: string): UseFormReturn {
   // ── Row mutations ──────────────────────────────────────────────────────────
 
   const addRow = React.useCallback(
-    (preset: ColPreset): void => {
-      if (!activePId || !activeSId || !form) return;
+    (sectionId: string, preset: ColPreset): void => {
+      if (!activePId || !form) return;
       const page = form.data.pages.find((p) => p.id === activePId);
       if (!page) return;
-      const section = page.sections.find((s) => s.id === activeSId);
+      const section = page.sections.find((s) => s.id === sectionId);
       if (!section) return;
-      patchSection(activePId, activeSId, {
+      patchSection(activePId, sectionId, {
         rows: [...section.rows, makeRow(preset)],
       });
     },
-    [activePId, activeSId, form, patchSection],
+    [activePId, form, patchSection],
   );
 
   const deleteRow = React.useCallback(
-    (rowId: string): void => {
-      if (!activePId || !activeSId || !form) return;
+    (sectionId: string, rowId: string): void => {
+      if (!activePId || !form) return;
       const page = form.data.pages.find((p) => p.id === activePId);
       if (!page) return;
-      const section = page.sections.find((s) => s.id === activeSId);
+      const section = page.sections.find((s) => s.id === sectionId);
       if (!section) return;
-      patchSection(activePId, activeSId, {
+      patchSection(activePId, sectionId, {
         rows: section.rows.filter((r) => r.id !== rowId),
       });
     },
-    [activePId, activeSId, form, patchSection],
+    [activePId, form, patchSection],
   );
 
   // ── Section mutations ──────────────────────────────────────────────────────
 
-  const addSection = React.useCallback((): void => {
-    if (!activePId) return;
-    addSectionAction(activePId);
+  const addSection = React.useCallback((pageId?: string): void => {
+    const targetPageId = pageId ?? activePId;
+    if (!targetPageId) return;
+    addSectionAction(targetPageId);
   }, [activePId, addSectionAction]);
 
   const deleteSection = React.useCallback(

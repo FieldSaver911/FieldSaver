@@ -39,7 +39,7 @@ export function RegisterPage() {
     setIsLoading(true);
     try {
       await register({ name: name.trim(), email: email.trim(), password });
-      navigate('/builder', { replace: true });
+      navigate('/forms', { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 409) {

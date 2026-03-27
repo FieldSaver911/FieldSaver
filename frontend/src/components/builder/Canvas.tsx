@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Row, Section, Cell, Field, ColPreset } from '@fieldsaver/shared';
+import type { Row, Section, Cell, Field, ColPreset, Page } from '@fieldsaver/shared';
 import { V } from '../../constants/design';
 import { COL_PRESETS, spanLabel } from '../../constants/fieldTypes';
 import { FieldCard } from './FieldCard';
@@ -481,7 +481,6 @@ interface RowViewProps {
   onSelectField: (id: string) => void;
   onDeleteField: (id: string) => void;
   onDeleteRow: (rowId: string) => void;
-  onMoveField: (fromCellId: string, fromIdx: number, toCellId: string, toIdx: number) => void;
   onUpdateRow: (rowId: string, patch: Partial<Row>) => void;
   onAddFieldToCell: (type: Field['type'], cellId: string, insertBeforeIndex: number) => void;
   dragState: DragState | null;
@@ -498,7 +497,6 @@ function RowView({
   onSelectField,
   onDeleteField,
   onDeleteRow,
-  onMoveField,
   onUpdateRow,
   onAddFieldToCell,
   dragState,
@@ -892,18 +890,16 @@ function RowView({
 interface SectionViewProps {
   section: Section;
   pageId: string;
-  isActive: boolean;
   selectedFieldId: string | null;
   onSelectSection: (secId: string) => void;
   onSelectField: (id: string) => void;
   onDeleteField: (id: string) => void;
-  onDeleteRow: (rowId: string) => void;
-  onMoveField: (fromCellId: string, fromIdx: number, toCellId: string, toIdx: number) => void;
+  onDeleteRow: (sectionId: string, rowId: string) => void;
   onDeleteSection: (secId: string) => void;
-  onAddRow: (preset: ColPreset) => void;
+  onAddRow: (sectionId: string, preset: ColPreset) => void;
   onAddFieldToCell: (type: Field['type'], cellId: string, insertBeforeIndex: number) => void;
   onUpdateSection: (secId: string, patch: Partial<Section>) => void;
-  onUpdateRow: (rowId: string, patch: Partial<Row>) => void;
+  onUpdateRow: (sectionId: string, rowId: string, patch: Partial<Row>) => void;
   dragState: DragState | null;
   onCanvasDragStart: (cellId: string, index: number) => void;
   onCanvasDrop: (toCellId: string, toIndex: number) => void;
@@ -914,13 +910,11 @@ interface SectionViewProps {
 
 function SectionView({
   section,
-  isActive,
   selectedFieldId,
   onSelectSection,
   onSelectField,
   onDeleteField,
   onDeleteRow,
-  onMoveField,
   onDeleteSection,
   onAddRow,
   onAddFieldToCell,
@@ -936,16 +930,16 @@ function SectionView({
   const [collapsed, setCollapsed] = React.useState(false);
   const [showRowMenu, setShowRowMenu] = React.useState(false);
   const [addRowHovered, setAddRowHovered] = React.useState(false);
-  const menuRef = React.useRef<HTMLDivElement>(null);
+  const [menuPos, setMenuPos] = React.useState<{ top: number; left: number; width: number } | null>(null);
+  const addRowButtonRef = React.useRef<HTMLButtonElement>(null);
 
   React.useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setShowRowMenu(false);
-      }
+    if (showRowMenu && addRowButtonRef.current) {
+      const rect = addRowButtonRef.current.getBoundingClientRect();
+      // Use button width but cap at 400px to prevent overflow
+      const menuWidth = Math.min(rect.width, 400);
+      setMenuPos({ top: rect.bottom + 8, left: rect.left, width: menuWidth });
     }
-    if (showRowMenu) document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
   }, [showRowMenu]);
 
   const totalFields = section.rows.reduce(
@@ -957,11 +951,10 @@ function SectionView({
     <div
       style={{
         marginBottom: V.s4,
-        border: `1.5px solid ${isActive ? V.primary : V.borderLight}`,
+        border: `1.5px solid ${V.borderLight}`,
         borderRadius: V.r5,
         backgroundColor: V.bgSurface,
-        boxShadow: isActive ? `0 0 0 3px ${V.primaryLight}` : V.shadow1,
-        transition: 'border-color 0.15s, box-shadow 0.15s',
+        boxShadow: V.shadow1,
         overflow: 'hidden',
       }}
       onClick={() => onSelectSection(section.id)}
@@ -1094,9 +1087,8 @@ function SectionView({
               selectedFieldId={selectedFieldId}
               onSelectField={onSelectField}
               onDeleteField={onDeleteField}
-              onDeleteRow={onDeleteRow}
-              onMoveField={onMoveField}
-              onUpdateRow={onUpdateRow}
+              onDeleteRow={(rowId) => onDeleteRow(section.id, rowId)}
+              onUpdateRow={(rowId, patch) => onUpdateRow(section.id, rowId, patch)}
               onAddFieldToCell={onAddFieldToCell}
               dragState={dragState}
               onCanvasDragStart={onCanvasDragStart}
@@ -1110,6 +1102,7 @@ function SectionView({
           {/* Add Row button + preset menu */}
           <div style={{ position: 'relative', marginTop: section.rows.length > 0 ? V.s2 : 0 }}>
             <button
+              ref={addRowButtonRef}
               type="button"
               onClick={(e) => { e.stopPropagation(); setShowRowMenu((v) => !v); }}
               style={{
@@ -1136,74 +1129,15 @@ function SectionView({
               Add Row
             </button>
 
-            {showRowMenu && (
-              <div
-                ref={menuRef}
-                onClick={(e) => e.stopPropagation()}
-                style={{
-                  position: 'absolute',
-                  bottom: '100%',
-                  left: 0,
-                  right: 0,
-                  zIndex: 200,
-                  backgroundColor: V.bgSurface,
-                  border: `1px solid ${V.border}`,
-                  borderRadius: V.r4,
-                  boxShadow: V.shadow2,
-                  padding: V.s3,
-                  marginBottom: V.s1,
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: V.s1,
+            {showRowMenu && menuPos && (
+              <LayoutPicker
+                onSelect={(preset) => {
+                  onAddRow(section.id, preset);
+                  setShowRowMenu(false);
                 }}
-              >
-                <div
-                  style={{
-                    width: '100%',
-                    fontSize: V.xs,
-                    color: V.textDisabled,
-                    fontFamily: V.font,
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.06em',
-                    marginBottom: V.s1,
-                  }}
-                >
-                  Column Layout
-                </div>
-                {COL_PRESETS.map((preset) => (
-                  <button
-                    key={preset.label}
-                    type="button"
-                    onClick={() => { onAddRow(preset); setShowRowMenu(false); }}
-                    title={preset.hint}
-                    style={{
-                      padding: `${V.s1} ${V.s2}`,
-                      border: `1px solid ${V.borderLight}`,
-                      borderRadius: V.r2,
-                      backgroundColor: V.bgApp,
-                      color: V.textPrimary,
-                      cursor: 'pointer',
-                      fontSize: V.sm,
-                      fontFamily: V.font,
-                      transition: 'all 0.1s',
-                      whiteSpace: 'nowrap',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = V.primary;
-                      e.currentTarget.style.backgroundColor = V.primaryBg;
-                      e.currentTarget.style.color = V.primary;
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = V.borderLight;
-                      e.currentTarget.style.backgroundColor = V.bgApp;
-                      e.currentTarget.style.color = V.textPrimary;
-                    }}
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
+                onClose={() => setShowRowMenu(false)}
+                position={menuPos}
+              />
             )}
           </div>
         </div>
@@ -1218,15 +1152,15 @@ export interface CanvasProps {
   selectedFieldId: string | null;
   onSelectField: (id: string) => void;
   onDeleteField: (id: string) => void;
-  onDeleteRow: (rowId: string) => void;
+  onDeleteRow: (sectionId: string, rowId: string) => void;
   onMoveField: (fromCellId: string, fromIdx: number, toCellId: string, toIdx: number) => void;
   onDeleteSection: (secId: string) => void;
-  onAddRow: (preset: ColPreset) => void;
+  onAddRow: (sectionId: string, preset: ColPreset) => void;
   onAddFieldToCell: (type: Field['type'], cellId: string, insertBeforeIndex: number) => void;
   onUpdateSection: (secId: string, patch: Partial<Section>) => void;
-  onUpdateRow: (rowId: string, patch: Partial<Row>) => void;
-  onAddSection: () => void;
-  activePage: { id: string; sections: Section[] } | null;
+  onUpdateRow: (sectionId: string, rowId: string, patch: Partial<Row>) => void;
+  onAddSection: (pageId?: string) => void;
+  activePage: Page | null;
   activeSId: string | null;
   onSelectSection: (secId: string) => void;
   activePageId: string | null;
@@ -1248,7 +1182,6 @@ export function Canvas({
   onUpdateRow,
   onAddSection,
   activePage,
-  activeSId,
   onSelectSection,
   activePageId,
   onColumnDragStart,
@@ -1329,7 +1262,7 @@ export function Canvas({
             color: V.textSecondary,
           }}
         >
-          <span style={{ color: V.textDisabled, fontWeight: 400 }}>Page</span>
+          <span style={{ color: V.textDisabled, fontWeight: 400 }}>{activePage?.title || 'Page'}</span>
           <span style={{ color: V.textDisabled }}>/</span>
           <span style={{ fontWeight: 600, color: V.textPrimary }}>Sections</span>
         </div>
@@ -1337,7 +1270,7 @@ export function Canvas({
         {/* Add section */}
         <button
           type="button"
-          onClick={onAddSection}
+          onClick={() => onAddSection(activePageId ?? undefined)}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -1412,13 +1345,11 @@ export function Canvas({
               key={section.id}
               section={section}
               pageId={activePageId ?? ''}
-              isActive={activeSId === section.id}
               selectedFieldId={selectedFieldId}
               onSelectSection={onSelectSection}
               onSelectField={onSelectField}
               onDeleteField={onDeleteField}
               onDeleteRow={onDeleteRow}
-              onMoveField={onMoveField}
               onDeleteSection={onDeleteSection}
               onAddRow={onAddRow}
               onAddFieldToCell={onAddFieldToCell}

@@ -3,7 +3,7 @@ import { useForm } from '../../hooks/useForm';
 import { Canvas } from '../canvas/Canvas';
 import { SettingsPanel } from './SettingsPanel';
 import { V } from '../../constants/design';
-import type { Field, Page } from '@fieldsaver/shared';
+import type { Field, Page, Section } from '@fieldsaver/shared';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -28,6 +28,14 @@ export function BuilderPage({ formId }: BuilderPageProps) {
     (patch: Partial<Page>) => {
       if (!form.activePId) return;
       form.updatePage(form.activePId, patch);
+    },
+    [form],
+  );
+
+  const handleUpdateSection = React.useCallback(
+    (patch: Partial<Section>) => {
+      if (!form.activeSId) return;
+      form.updateSection(form.activeSId, patch);
     },
     [form],
   );
@@ -92,8 +100,10 @@ export function BuilderPage({ formId }: BuilderPageProps) {
       <SettingsPanel
         selectedField={form.selectedField}
         activePage={form.activePage}
+        activeSection={form.activeSection}
         onUpdateField={handleUpdateField}
         onUpdatePage={handleUpdatePage}
+        onUpdateSection={handleUpdateSection}
       />
     </div>
   );

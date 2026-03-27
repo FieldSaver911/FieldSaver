@@ -1,15 +1,16 @@
 import React from 'react';
-import type { Field, Page, FieldType } from '@fieldsaver/shared';
+import type { Field, Page, Section, FieldType } from '@fieldsaver/shared';
 import { V } from '../../constants/design';
 import { FIELD_TYPES } from '../../constants/fieldTypes';
 import { useFormStore } from '../../stores/useFormStore';
 import { FieldPreview } from './FieldPreview';
 import { OptionsEditor } from './OptionsEditor';
 import { FieldKeysPanel } from '../library/FieldKeysPanel';
+import { SidebarCollapseIcon } from '../icons/SidebarCollapseIcon';
 
 // ─── Tab type ─────────────────────────────────────────────────────────────────
 
-type PanelTab = 'field' | 'page' | 'form';
+type PanelTab = 'field' | 'page' | 'form' | 'section';
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -654,6 +655,63 @@ function PageTab({ page, onUpdate }: PageTabProps) {
   );
 }
 
+// ─── SectionTab ───────────────────────────────────────────────────────────────
+
+interface SectionTabProps {
+  section: Section;
+  onUpdate: (patch: Partial<Section>) => void;
+  pageNumber?: number;
+  sectionNumber?: number;
+}
+
+function SectionTab({ section, onUpdate, pageNumber, sectionNumber }: SectionTabProps) {
+  return (
+    <div style={{ padding: V.s4 }}>
+      {pageNumber !== undefined && sectionNumber !== undefined && (
+        <div style={{ marginBottom: V.s4, paddingBottom: V.s3, borderBottom: `1px solid ${V.borderLight}` }}>
+          <div style={{ fontSize: V.xs, fontWeight: 600, color: V.textSecondary, textTransform: 'uppercase', letterSpacing: '0.05em', fontFamily: V.font }}>
+            Page {pageNumber} / Section {sectionNumber}
+          </div>
+        </div>
+      )}
+      <LabelledInput
+        label="Section title"
+        value={section.title}
+        onChange={(v) => onUpdate({ title: v })}
+        placeholder="Section title"
+      />
+
+      <ToggleRow
+        label="Allow Repeating"
+        description="Respondent can add multiple instances of this section"
+        checked={section.settings.repeatable}
+        onChange={(v) => onUpdate({ settings: { ...section.settings, repeatable: v } })}
+      />
+
+      {section.settings.repeatable && (
+        <>
+          <LabelledInput
+            label="Add Button Label"
+            value={section.settings.repeatLabel}
+            onChange={(v) => onUpdate({ settings: { ...section.settings, repeatLabel: v } })}
+            placeholder="+ Add Another"
+          />
+          <LabelledInput
+            label="Maximum Instances"
+            type="number"
+            value={String(section.settings.maxRepeats || '')}
+            onChange={(v) => {
+              const parsed = v ? parseInt(v, 10) : 5; // Default to 5 if empty
+              onUpdate({ settings: { ...section.settings, maxRepeats: parsed } });
+            }}
+            placeholder="No limit"
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── FormTab ─────────────────────────────────────────────────────────────────
 
 function FormTab() {
@@ -743,17 +801,22 @@ function FormTab() {
 export interface SettingsPanelProps {
   selectedField: Field | null;
   activePage: Page | null;
+  activeSection: Section | null;
   onUpdateField: (patch: Partial<Field>) => void;
   onUpdatePage: (patch: Partial<Page>) => void;
+  onUpdateSection: (patch: Partial<Section>) => void;
 }
 
 export function SettingsPanel({
   selectedField,
   activePage,
+  activeSection,
   onUpdateField,
   onUpdatePage,
+  onUpdateSection,
 }: SettingsPanelProps) {
   const [activeTab, setActiveTab] = React.useState<PanelTab>('field');
+  const form = useFormStore((s) => s.form);
   const [collapsed, setCollapsed] = React.useState(false);
 
   // Auto-switch to field tab when a field is selected
@@ -761,9 +824,15 @@ export function SettingsPanel({
     if (selectedField) setActiveTab('field');
   }, [selectedField]);
 
+  // Auto-switch to section tab when a section is selected (unless a field is selected)
+  React.useEffect(() => {
+    if (activeSection && !selectedField) setActiveTab('section');
+  }, [activeSection, selectedField]);
+
   const tabs: Array<{ id: PanelTab; label: string; icon: string }> = [
     { id: 'field', label: 'Field', icon: 'Aa' },
     { id: 'page',  label: 'Page',  icon: '📄' },
+    { id: 'section', label: 'Section', icon: '≡' },
     { id: 'form',  label: 'Form',  icon: '⚙' },
   ];
 
@@ -820,7 +889,7 @@ export function SettingsPanel({
           ))}
         </div>
 
-        {/* Collapse button */}
+        {/* Expand button */}
         <button
           type="button"
           onClick={() => setCollapsed(false)}
@@ -831,7 +900,6 @@ export function SettingsPanel({
             padding: 0,
             border: 'none',
             backgroundColor: 'transparent',
-            fontSize: V.md,
             color: V.textSecondary,
             cursor: 'pointer',
             marginTop: 'auto',
@@ -840,8 +908,10 @@ export function SettingsPanel({
             alignItems: 'center',
             justifyContent: 'center',
           }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = V.textPrimary; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = V.textSecondary; }}
         >
-          ◀
+          <SidebarCollapseIcon collapsed size={18} color="currentColor" />
         </button>
       </div>
     );
@@ -907,7 +977,6 @@ export function SettingsPanel({
             border: 'none',
             borderBottom: '2px solid transparent',
             backgroundColor: 'transparent',
-            fontSize: V.md,
             color: V.textSecondary,
             cursor: 'pointer',
             fontFamily: V.font,
@@ -916,8 +985,10 @@ export function SettingsPanel({
             alignItems: 'center',
             justifyContent: 'center',
           }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = V.textPrimary; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = V.textSecondary; }}
         >
-          ▶
+          <SidebarCollapseIcon collapsed={false} size={16} color="currentColor" />
         </button>
       </div>
 
@@ -946,6 +1017,20 @@ export function SettingsPanel({
           ) : (
             <div style={{ padding: V.s6, textAlign: 'center', color: V.textDisabled, fontSize: V.sm, fontFamily: V.font }}>
               No page selected
+            </div>
+          )
+        )}
+        {activeTab === 'section' && (
+          activeSection ? (
+            <SectionTab
+              section={activeSection}
+              onUpdate={onUpdateSection}
+              pageNumber={form && activePage ? form.data.pages.findIndex((p) => p.id === activePage.id) + 1 : undefined}
+              sectionNumber={activePage ? activePage.sections.findIndex((s) => s.id === activeSection.id) + 1 : undefined}
+            />
+          ) : (
+            <div style={{ padding: V.s6, textAlign: 'center', color: V.textDisabled, fontSize: V.sm, fontFamily: V.font }}>
+              Select a section to edit its settings
             </div>
           )
         )}

@@ -4,9 +4,10 @@ import { V } from '../../constants/design';
 interface LayoutPickerProps {
   onSelect: (preset: typeof COL_PRESETS[0]) => void;
   onClose: () => void;
+  position?: { top: number; left: number; width: number };
 }
 
-export function LayoutPicker({ onSelect, onClose }: LayoutPickerProps) {
+export function LayoutPicker({ onSelect, onClose, position }: LayoutPickerProps) {
   return (
     <>
       {/* Backdrop - click to close */}
@@ -17,7 +18,7 @@ export function LayoutPicker({ onSelect, onClose }: LayoutPickerProps) {
           left: 0,
           right: 0,
           bottom: 0,
-          zIndex: 999,
+          zIndex: 9998,
         }}
         onClick={onClose}
       />
@@ -25,19 +26,20 @@ export function LayoutPicker({ onSelect, onClose }: LayoutPickerProps) {
       {/* Dropdown menu - very compact */}
       <div
         style={{
-          position: 'absolute',
-          top: '100%',
-          left: 0,
-          marginTop: '4px',
+          position: position ? 'fixed' : 'absolute',
+          ...(position
+            ? { top: `${position.top}px`, left: `${position.left}px`, width: `${position.width}px` }
+            : { top: '100%', left: 0, marginTop: '4px', right: 'auto' }),
           backgroundColor: V.bgSurface,
           borderRadius: V.r3,
           padding: '10px',
-          minWidth: '380px',
+          maxWidth: 'calc(100vw - 20px)',
           maxHeight: '65vh',
           overflowY: 'auto',
+          overflowX: 'hidden',
           boxShadow: V.shadow3,
           border: `1px solid ${V.borderLight}`,
-          zIndex: 1000,
+          zIndex: 9999,
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -62,7 +64,7 @@ export function LayoutPicker({ onSelect, onClose }: LayoutPickerProps) {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
             gap: '6px',
           }}
         >

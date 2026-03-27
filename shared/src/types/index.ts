@@ -210,21 +210,55 @@ export interface NarrativeTemplate {
 // ─── Form Settings ───────────────────────────────────────────────────────────
 
 export interface FormSettings {
+  // Submission
   submitLabel: string;
   successMessage: string;
   redirectUrl: string;
+  confirmationEmail: boolean;
+
+  // Display & Theme
   showProgress: boolean;
-  allowDraft: boolean;
+  showPageNumbers: boolean;
   formLayout: FormLayout;
   brandColor: string;
-  showPageNumbers: boolean;
+  companyLogoUrl: string;
+  compactMode: boolean;
+  singlePageDefaultExpanded: boolean;   // expand first page accordion by default
+  singlePageAllowMultiOpen: boolean;    // allow multiple accordion pages open at once
+
+  // Behavior
+  allowDraft: boolean;
+  autoSave: boolean;
+  validateOnChange: boolean;
+  preventMultipleSubmissions: boolean;
+  requireAllPages: boolean;
+  allowGoBack: boolean;
+  randomizePageOrder: boolean;
+  randomizeFieldOrder: boolean;
+
+  // Access & Sharing
+  closedFormMessage: string;
+  passwordProtected: boolean;
+  allowedDomains: string;
+
+  // Integrations
   mondayBoardId: string;
   mondayGroupId: string;
+  mondayCreateLabels: boolean;
   webhookUrl: string;
+  webhookAuthHeader: string;
+
+  // Notifications
   notifyEmails: string;
+  digestEmail: boolean;
+
+  // Data & Export
   dateFormat: string;
   emptyFieldHandling: 'omit' | 'null' | 'empty-string';
   retentionDays: number;
+  includeXmlNil: boolean;
+  includePertinentNegatives: boolean;
+  includeNotValues: boolean;
 }
 
 // ─── Form ────────────────────────────────────────────────────────────────────

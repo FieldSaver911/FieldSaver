@@ -72,8 +72,10 @@ describe('SettingsPanel', () => {
       <SettingsPanel
         selectedField={null}
         activePage={null}
+        activeSection={null}
         onUpdateField={vi.fn()}
         onUpdatePage={vi.fn()}
+        onUpdateSection={vi.fn()}
       />,
     );
 
@@ -87,8 +89,10 @@ describe('SettingsPanel', () => {
       <SettingsPanel
         selectedField={null}
         activePage={null}
+        activeSection={null}
         onUpdateField={vi.fn()}
         onUpdatePage={vi.fn()}
+        onUpdateSection={vi.fn()}
       />,
     );
 
@@ -100,8 +104,10 @@ describe('SettingsPanel', () => {
       <SettingsPanel
         selectedField={makeField()}
         activePage={null}
+        activeSection={null}
         onUpdateField={vi.fn()}
         onUpdatePage={vi.fn()}
+        onUpdateSection={vi.fn()}
       />,
     );
 
@@ -115,8 +121,10 @@ describe('SettingsPanel', () => {
       <SettingsPanel
         selectedField={makeField()}
         activePage={null}
+        activeSection={null}
         onUpdateField={onUpdateField}
         onUpdatePage={vi.fn()}
+        onUpdateSection={vi.fn()}
       />,
     );
 
@@ -132,8 +140,10 @@ describe('SettingsPanel', () => {
       <SettingsPanel
         selectedField={null}
         activePage={makePage({ title: 'Incident Details' })}
+        activeSection={null}
         onUpdateField={vi.fn()}
         onUpdatePage={vi.fn()}
+        onUpdateSection={vi.fn()}
       />,
     );
 
@@ -149,8 +159,10 @@ describe('SettingsPanel', () => {
       <SettingsPanel
         selectedField={null}
         activePage={makePage({ title: 'Page 1' })}
+        activeSection={null}
         onUpdateField={vi.fn()}
         onUpdatePage={onUpdatePage}
+        onUpdateSection={vi.fn()}
       />,
     );
 
@@ -167,8 +179,10 @@ describe('SettingsPanel', () => {
       <SettingsPanel
         selectedField={null}
         activePage={makePage()}
+        activeSection={null}
         onUpdateField={vi.fn()}
         onUpdatePage={vi.fn()}
+        onUpdateSection={vi.fn()}
       />,
     );
 
@@ -180,8 +194,10 @@ describe('SettingsPanel', () => {
       <SettingsPanel
         selectedField={makeField()}
         activePage={makePage()}
+        activeSection={null}
         onUpdateField={vi.fn()}
         onUpdatePage={vi.fn()}
+        onUpdateSection={vi.fn()}
       />,
     );
 
@@ -196,8 +212,10 @@ describe('SettingsPanel', () => {
       <SettingsPanel
         selectedField={makeField({ required: false })}
         activePage={null}
+        activeSection={null}
         onUpdateField={onUpdateField}
         onUpdatePage={vi.fn()}
+        onUpdateSection={vi.fn()}
       />,
     );
 

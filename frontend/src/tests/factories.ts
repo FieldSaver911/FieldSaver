@@ -15,18 +15,39 @@ export function makeFormSettings(overrides: Partial<FormSettings> = {}): FormSet
     submitLabel: 'Submit',
     successMessage: 'Thank you!',
     redirectUrl: '',
+    confirmationEmail: false,
     showProgress: true,
-    allowDraft: false,
-    formLayout: 'progress',
-    brandColor: '',
     showPageNumbers: false,
+    formLayout: 'progress',
+    brandColor: '#0073EA',
+    companyLogoUrl: '',
+    compactMode: false,
+    singlePageDefaultExpanded: true,
+    singlePageAllowMultiOpen: false,
+    allowDraft: false,
+    autoSave: false,
+    validateOnChange: false,
+    preventMultipleSubmissions: false,
+    requireAllPages: false,
+    allowGoBack: false,
+    randomizePageOrder: false,
+    randomizeFieldOrder: false,
+    closedFormMessage: 'This form is no longer accepting responses.',
+    passwordProtected: false,
+    allowedDomains: '',
     mondayBoardId: '',
     mondayGroupId: '',
+    mondayCreateLabels: false,
     webhookUrl: '',
+    webhookAuthHeader: '',
     notifyEmails: '',
+    digestEmail: false,
     dateFormat: 'MM/DD/YYYY',
     emptyFieldHandling: 'omit',
     retentionDays: 90,
+    includeXmlNil: false,
+    includePertinentNegatives: false,
+    includeNotValues: false,
     ...overrides,
   };
 }
@@ -55,7 +76,7 @@ export function makeField(overrides: Partial<Field> = {}): Field {
 }
 
 export function makeCell(overrides: Partial<Cell> = {}): Cell {
-  return { id: uid(), fields: [], ...overrides };
+  return { id: uid(), fields: [makeField()], ...overrides };
 }
 
 export function makeRow(overrides: Partial<Row> = {}): Row {
@@ -72,7 +93,7 @@ export function makeSection(overrides: Partial<Section> = {}): Section {
     id: uid(),
     title: 'Test Section',
     settings: { repeatable: false, repeatLabel: '+ Add Another', maxRepeats: 5 },
-    rows: [],
+    rows: [makeRow()],
     ...overrides,
   };
 }

@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import type { Form, Page, Section, Row } from '@fieldsaver/shared';
+import { X } from 'lucide-react';
 import { V } from '../../constants/design';
 import { LiveField } from './LiveField';
 import { RequiredDrawer } from './RequiredDrawer';
@@ -55,61 +56,88 @@ interface PageBodyProps {
   onFieldChange: (fieldId: string, value: unknown) => void;
   brandColor: string;
   compactMode: boolean;
+  expandedSections: Record<string, boolean>;
+  onToggleSection: (sectionId: string) => void;
 }
 
-function PageBody({ page, fieldValues, onFieldChange, brandColor: _brandColor, compactMode }: PageBodyProps) {
+function PageBody({ page, fieldValues, onFieldChange, brandColor: _brandColor, compactMode, expandedSections, onToggleSection }: PageBodyProps) {
   const rowGap = compactMode ? V.s2 : V.s3;
   const sectionGap = compactMode ? V.s3 : V.s4;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: sectionGap }}>
-      {page.sections?.map((section: Section) => (
-        <div key={section.id}>
-          {section.title && (
-            <div
-              style={{
-                fontSize: V.sm,
-                fontWeight: 700,
-                color: V.textSecondary,
-                fontFamily: V.font,
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                marginBottom: V.s2,
-              }}
-            >
-              {section.title}
-            </div>
-          )}
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: V.s3 }}>
-            {section.rows?.map((row: Row) => (
-              <div
-                key={row.id}
+      {page.sections?.map((section: Section) => {
+        const isExpanded = expandedSections[section.id] !== false; // Default to expanded
+        return (
+          <div key={section.id}>
+            {section.title && (
+              <button
+                type="button"
+                onClick={() => onToggleSection(section.id)}
                 style={{
-                  display: 'grid',
-                  gridTemplateColumns: row.preset?.cols
-                    ?.map((col) => `${(col / 12) * 100}%`)
-                    .join(' ') || '1fr',
-                  gap: rowGap,
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  fontSize: V.sm,
+                  fontWeight: 700,
+                  color: V.textSecondary,
+                  fontFamily: V.font,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  marginBottom: V.s2,
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 0,
+                  transition: 'color 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = V.textPrimary;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = V.textSecondary;
                 }}
               >
-                {row.cells?.map((cell) => (
-                  <div key={cell.id}>
-                    {cell.fields?.map((field) => (
-                      <LiveField
-                        key={field.id}
-                        field={field}
-                        value={(fieldValues[field.id] as string | null | undefined) ?? null}
-                        onChange={(value) => onFieldChange(field.id, value)}
-                      />
+                <span>{section.title}</span>
+                <span style={{ fontSize: V.xs, fontWeight: 600 }}>
+                  {isExpanded ? 'Collapse' : 'Expand'}
+                </span>
+              </button>
+            )}
+
+            {isExpanded && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: V.s3 }}>
+                {section.rows?.map((row: Row) => (
+                  <div
+                    key={row.id}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: row.preset?.cols
+                        ?.map((col) => `${(col / 12) * 100}%`)
+                        .join(' ') || '1fr',
+                      gap: rowGap,
+                    }}
+                  >
+                    {row.cells?.map((cell) => (
+                      <div key={cell.id}>
+                        {cell.fields?.map((field) => (
+                          <LiveField
+                            key={field.id}
+                            field={field}
+                            value={(fieldValues[field.id] as string | null | undefined) ?? null}
+                            onChange={(value) => onFieldChange(field.id, value)}
+                          />
+                        ))}
+                      </div>
                     ))}
                   </div>
                 ))}
               </div>
-            ))}
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -126,6 +154,8 @@ interface PageAccordionItemProps {
   brandColor: string;
   compactMode: boolean;
   onRequiredBadgeClick: () => void;
+  expandedSections: Record<string, boolean>;
+  onToggleSection: (sectionId: string) => void;
 }
 
 function PageAccordionItem({
@@ -138,6 +168,8 @@ function PageAccordionItem({
   brandColor,
   compactMode,
   onRequiredBadgeClick,
+  expandedSections,
+  onToggleSection,
 }: PageAccordionItemProps) {
   const [headerHovered, setHeaderHovered] = React.useState(false);
   const [badgeHovered, setBadgeHovered] = React.useState(false);
@@ -264,24 +296,17 @@ function PageAccordionItem({
           </button>
         )}
 
-        {/* Chevron */}
+        {/* Expand/Collapse Text */}
         <div
           style={{
-            width: 24,
-            height: 24,
-            borderRadius: '50%',
-            background: isOpen ? `${brandColor}22` : 'transparent',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            fontSize: V.xs,
+            fontWeight: 700,
             color: isOpen ? brandColor : V.textDisabled,
-            fontSize: '12px',
-            transition: 'all 0.2s',
-            transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: 'color 0.2s',
             flexShrink: 0,
           }}
         >
-          ▼
+          {isOpen ? 'Collapse' : 'Expand'}
         </div>
       </button>
 
@@ -301,6 +326,8 @@ function PageAccordionItem({
               onFieldChange={onFieldChange}
               brandColor={brandColor}
               compactMode={compactMode}
+              expandedSections={expandedSections}
+              onToggleSection={onToggleSection}
             />
           </div>
         </div>
@@ -328,6 +355,7 @@ export function PreviewSinglePage({ form, onClose }: PreviewSinglePageProps) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps — intentionally run once
 
   const [openPages, setOpenPages] = React.useState<Record<string, boolean>>(initialOpen);
+  const [expandedSections, setExpandedSections] = React.useState<Record<string, boolean>>({});
   const [fieldValues, setFieldValues] = React.useState<Record<string, unknown>>({});
   const [showRequiredDrawer, setShowRequiredDrawer] = React.useState(false);
 
@@ -341,6 +369,10 @@ export function PreviewSinglePage({ form, onClose }: PreviewSinglePageProps) {
     } else {
       setOpenPages((prev) => ({ [pageId]: !prev[pageId] }));
     }
+  };
+
+  const toggleSection = (sectionId: string) => {
+    setExpandedSections((prev) => ({ ...prev, [sectionId]: !prev[sectionId] }));
   };
 
   const { total: fTotal, filled: fFilled } = useMemo(
@@ -443,6 +475,8 @@ export function PreviewSinglePage({ form, onClose }: PreviewSinglePageProps) {
                 brandColor={brandColor}
                 compactMode={compactMode}
                 onRequiredBadgeClick={() => setShowRequiredDrawer(true)}
+                expandedSections={expandedSections}
+                onToggleSection={toggleSection}
               />
             ))}
 
@@ -558,7 +592,6 @@ function CloseButton({ onClick }: CloseButtonProps) {
         height: 28,
         borderRadius: '50%',
         cursor: 'pointer',
-        fontSize: '16px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -566,7 +599,7 @@ function CloseButton({ onClick }: CloseButtonProps) {
         transition: 'background 0.15s',
       }}
     >
-      ×
+      <X size={20} />
     </button>
   );
 }

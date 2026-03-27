@@ -20,21 +20,49 @@ function defaultFormData(): FormData {
 
 function defaultFormSettings(): FormSettings {
   return {
+    // Submission
     submitLabel: 'Submit',
     successMessage: 'Thank you! Your response has been submitted.',
     redirectUrl: '',
+    confirmationEmail: false,
+    // Display & Theme
     showProgress: true,
-    allowDraft: false,
-    formLayout: 'progress',
-    brandColor: '',
     showPageNumbers: false,
+    formLayout: 'progress',
+    brandColor: '#0073EA',
+    companyLogoUrl: '',
+    compactMode: false,
+    singlePageDefaultExpanded: true,
+    singlePageAllowMultiOpen: false,
+    // Behavior
+    allowDraft: false,
+    autoSave: false,
+    validateOnChange: false,
+    preventMultipleSubmissions: false,
+    requireAllPages: false,
+    allowGoBack: false,
+    randomizePageOrder: false,
+    randomizeFieldOrder: false,
+    // Access & Sharing
+    closedFormMessage: 'This form is no longer accepting responses.',
+    passwordProtected: false,
+    allowedDomains: '',
+    // Integrations
     mondayBoardId: '',
     mondayGroupId: '',
+    mondayCreateLabels: false,
     webhookUrl: '',
+    webhookAuthHeader: '',
+    // Notifications
     notifyEmails: '',
+    digestEmail: false,
+    // Data & Export
     dateFormat: 'MM/DD/YYYY',
     emptyFieldHandling: 'omit',
     retentionDays: 90,
+    includeXmlNil: false,
+    includePertinentNegatives: false,
+    includeNotValues: false,
   };
 }
 

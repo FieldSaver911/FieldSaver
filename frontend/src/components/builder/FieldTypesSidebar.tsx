@@ -1,6 +1,8 @@
+import React from 'react';
 import type { Field } from '@fieldsaver/shared';
 import { V } from '../../constants/design';
 import { FIELD_TYPES } from '../../constants/fieldTypes';
+import { SidebarCollapseIcon } from '../icons/SidebarCollapseIcon';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -17,6 +19,7 @@ export function FieldTypesSidebar({
   onPaletteDragStart,
   onPaletteDragEnd,
 }: FieldTypesSidebarProps) {
+  const [collapsed, setCollapsed] = React.useState(false);
   const categories = ['basic', 'choice', 'advanced', 'layout'] as const;
   const catLabels: Record<string, string> = {
     basic: 'BASIC',
@@ -31,6 +34,48 @@ export function FieldTypesSidebar({
     advanced: '#6BE7B9',   // Green
     layout: '#FFB366',     // Orange
   };
+
+  if (collapsed) {
+    return (
+      <div
+        style={{
+          width: '36px',
+          flexShrink: 0,
+          backgroundColor: V.bgSurface,
+          borderRight: `1px solid ${V.borderLight}`,
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Expand button */}
+        <button
+          type="button"
+          onClick={() => setCollapsed(false)}
+          title="Expand Field Types"
+          style={{
+            width: '36px',
+            height: '52px',
+            padding: 0,
+            border: 'none',
+            borderBottom: `1px solid ${V.borderLight}`,
+            backgroundColor: 'transparent',
+            color: V.textSecondary,
+            cursor: 'pointer',
+            transition: 'all 0.12s',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = V.textPrimary; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = V.textSecondary; }}
+        >
+          <SidebarCollapseIcon collapsed size={18} color="currentColor" />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -52,6 +97,7 @@ export function FieldTypesSidebar({
           padding: `0 ${V.s3}`,
           display: 'flex',
           alignItems: 'center',
+          justifyContent: 'space-between',
           borderBottom: `1px solid ${V.borderLight}`,
           flexShrink: 0,
         }}
@@ -68,6 +114,26 @@ export function FieldTypesSidebar({
         >
           Field Types
         </span>
+        <button
+          type="button"
+          onClick={() => setCollapsed(true)}
+          title="Collapse Field Types"
+          style={{
+            border: 'none',
+            background: 'transparent',
+            color: V.textSecondary,
+            cursor: 'pointer',
+            padding: 0,
+            display: 'flex',
+            alignItems: 'center',
+            lineHeight: 1,
+            transition: 'color 0.12s',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = V.textPrimary; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = V.textSecondary; }}
+        >
+          <SidebarCollapseIcon collapsed={false} size={16} color="currentColor" />
+        </button>
       </div>
 
       {/* Field types list */}

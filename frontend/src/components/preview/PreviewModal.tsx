@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Form } from '@fieldsaver/shared';
+import { Monitor, Tablet, Smartphone, X } from 'lucide-react';
 import { V } from '../../constants/design';
 import { PreviewProgress } from './PreviewProgress';
 import { PreviewSinglePage } from './PreviewSinglePage';
@@ -43,7 +44,7 @@ export function PreviewModal({ form, onClose }: PreviewModalProps) {
           />
         );
       case 'single-page':
-        return <PreviewSinglePage form={form} deviceWidth={deviceWidth} />;
+        return <PreviewSinglePage form={form} deviceWidth={deviceWidth} onClose={onClose} />;
       case 'side-nav':
         return (
           <PreviewSideNav
@@ -51,6 +52,7 @@ export function PreviewModal({ form, onClose }: PreviewModalProps) {
             currentPageIndex={currentPageIndex}
             onChangePageIndex={setCurrentPageIndex}
             deviceWidth={deviceWidth}
+            onClose={onClose}
           />
         );
       default:
@@ -99,27 +101,34 @@ export function PreviewModal({ form, onClose }: PreviewModalProps) {
 
         {/* Device Switcher */}
         <div style={{ display: 'flex', gap: V.s2 }}>
-          {(['web', 'tablet', 'mobile'] as const).map((device) => (
-            <button
-              key={device}
-              type="button"
-              onClick={() => setSelectedDevice(device)}
-              style={{
-                padding: `${V.s1} ${V.s3}`,
-                border: `1px solid ${selectedDevice === device ? V.primary : V.border}`,
-                borderRadius: V.r2,
-                backgroundColor: selectedDevice === device ? V.primary : V.bgApp,
-                color: selectedDevice === device ? V.bgSurface : V.textPrimary,
-                cursor: 'pointer',
-                fontSize: V.xs,
-                fontWeight: selectedDevice === device ? 600 : 400,
-                fontFamily: V.font,
-                textTransform: 'capitalize',
-              }}
-            >
-              {device === 'web' ? '💻' : device === 'tablet' ? '📱' : '📱'} {device}
-            </button>
-          ))}
+          {(['web', 'tablet', 'mobile'] as const).map((device) => {
+            const Icon = device === 'web' ? Monitor : device === 'tablet' ? Tablet : Smartphone;
+            return (
+              <button
+                key={device}
+                type="button"
+                onClick={() => setSelectedDevice(device)}
+                style={{
+                  padding: `${V.s1} ${V.s3}`,
+                  border: `1px solid ${selectedDevice === device ? V.primary : V.border}`,
+                  borderRadius: V.r2,
+                  backgroundColor: selectedDevice === device ? V.primary : V.bgApp,
+                  color: selectedDevice === device ? V.bgSurface : V.textPrimary,
+                  cursor: 'pointer',
+                  fontSize: V.xs,
+                  fontWeight: selectedDevice === device ? 600 : 400,
+                  fontFamily: V.font,
+                  textTransform: 'capitalize',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: V.s1,
+                }}
+              >
+                <Icon size={16} />
+                {device}
+              </button>
+            );
+          })}
         </div>
 
         {/* Close button */}
@@ -131,13 +140,14 @@ export function PreviewModal({ form, onClose }: PreviewModalProps) {
             background: 'transparent',
             color: V.textSecondary,
             cursor: 'pointer',
-            fontSize: '20px',
             padding: 0,
-            lineHeight: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
           title="Close"
         >
-          ✕
+          <X size={20} />
         </button>
       </div>
 

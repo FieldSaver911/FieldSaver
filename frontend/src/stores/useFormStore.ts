@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Form, Page, Section, Row, Field } from '@fieldsaver/shared';
+import type { Form, Page, Section, Row, Field, FormSettings } from '@fieldsaver/shared';
 import { formsApi } from '../api/forms';
 
 interface FormStore {
@@ -39,6 +39,9 @@ interface FormStore {
 
   // Actions — rows
   setRows: (rows: Row[]) => void;
+
+  // Actions — settings
+  updateSettings: (patch: Partial<FormSettings>) => void;
 
   // Actions — save
   save: () => Promise<void>;
@@ -112,11 +115,29 @@ export const useFormStore = create<FormStore>((set, get) => ({
   },
 
   setActiveSection: (sectionId: string) => {
-    const { form, activePId } = get();
+    const { form } = get();
     if (!form) return;
-    const page = form.data.pages.find((p) => p.id === activePId) ?? null;
-    const section = page?.sections.find((s) => s.id === sectionId) ?? null;
-    set({ activeSId: sectionId, activeSection: section, selFId: null });
+
+    // Search all pages to find the section
+    let foundSection: Section | null = null;
+    let foundPageId: string | null = null;
+
+    for (const page of form.data.pages) {
+      const section = page.sections.find((s) => s.id === sectionId);
+      if (section) {
+        foundSection = section;
+        foundPageId = page.id;
+        break;
+      }
+    }
+
+    set({
+      activePId: foundPageId,
+      activeSId: sectionId,
+      activeSection: foundSection,
+      activePage: foundPageId ? form.data.pages.find((p) => p.id === foundPageId) ?? null : null,
+      selFId: null
+    });
   },
 
   setSelectedField: (fieldId: string | null) => {
@@ -194,7 +215,8 @@ export const useFormStore = create<FormStore>((set, get) => ({
         p.id !== pageId ? p : { ...p, sections: [...p.sections, newSection] },
       );
       const form = { ...state.form, data: { ...state.form.data, pages } };
-      return { form, activeSId: newSection.id, activeSection: newSection, isDirty: true };
+      const updatedPage = form.data.pages.find((p) => p.id === pageId) ?? null;
+      return { form, activePId: pageId, activePage: updatedPage, activeSId: newSection.id, activeSection: newSection, isDirty: true };
     });
   },
 
@@ -207,13 +229,36 @@ export const useFormStore = create<FormStore>((set, get) => ({
         p.id !== pageId ? p : { ...p, sections: p.sections.filter((s) => s.id !== secId) },
       );
       const form = { ...state.form, data: { ...state.form.data, pages } };
-      return { form, isDirty: true };
+
+      // If the deleted section was active, switch to the first remaining section
+      let newActiveSId = state.activeSId;
+      let newActiveSection = state.activeSection;
+
+      if (state.activeSId === secId) {
+        const remainingPage = form.data.pages.find((p) => p.id === pageId);
+        const firstSection = remainingPage?.sections[0] ?? null;
+        newActiveSId = firstSection?.id ?? null;
+        newActiveSection = firstSection ?? null;
+      }
+
+      const updatedPage = form.data.pages.find((p) => p.id === pageId) ?? null;
+      return { form, activePage: updatedPage, activeSId: newActiveSId, activeSection: newActiveSection, isDirty: true };
     });
   },
 
   setRows: (rows: Row[]) => {
     const { activePId, activeSId } = get();
     if (activePId && activeSId) get().patchSection(activePId, activeSId, { rows });
+  },
+
+  updateSettings: (patch) => {
+    set((state) => {
+      if (!state.form) return {};
+      return {
+        form: { ...state.form, settings: { ...state.form.settings, ...patch } },
+        isDirty: true,
+      };
+    });
   },
 
   markDirty: () => set({ isDirty: true }),

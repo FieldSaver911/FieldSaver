@@ -25,6 +25,16 @@ export function PreviewProgress({
 
   const [fieldValues, setFieldValues] = React.useState<Record<string, any>>({});
 
+  // Theme & settings
+  const brandColor = form.settings?.brandColor || V.primary;
+  const compactMode = form.settings?.compactMode || false;
+  const rowGap = compactMode ? V.s2 : V.s3;
+  const sectionGap = compactMode ? V.s3 : V.s4;
+  const contentPad = compactMode ? V.s3 : V.s4;
+  const showProgress = form.settings?.showProgress !== false;
+  const showPageNumbers = form.settings?.showPageNumbers !== false;
+  const logoUrl = form.settings?.companyLogoUrl;
+
   const handleFieldChange = (fieldId: string, value: any) => {
     setFieldValues((prev) => ({
       ...prev,
@@ -51,40 +61,57 @@ export function PreviewProgress({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       {/* Progress Bar */}
-      <div style={{ padding: V.s3, backgroundColor: V.bgApp }}>
-        <div
-          style={{
-            height: '4px',
-            backgroundColor: V.border,
-            borderRadius: '2px',
-            overflow: 'hidden',
-            marginBottom: V.s2,
-          }}
-        >
+      {showProgress && (
+        <div style={{ padding: V.s3, backgroundColor: V.bgApp }}>
           <div
             style={{
-              height: '100%',
-              backgroundColor: V.primary,
-              width: `${progressPercent}%`,
-              transition: 'width 0.3s ease',
+              height: '4px',
+              backgroundColor: V.border,
+              borderRadius: '2px',
+              overflow: 'hidden',
+              marginBottom: V.s2,
             }}
-          />
+          >
+            <div
+              style={{
+                height: '100%',
+                backgroundColor: brandColor,
+                width: `${progressPercent}%`,
+                transition: 'width 0.3s ease',
+              }}
+            />
+          </div>
+          {showPageNumbers && (
+            <div
+              style={{
+                fontSize: V.xs,
+                color: V.textSecondary,
+                textAlign: 'center',
+                fontFamily: V.font,
+              }}
+            >
+              Page {currentPageIndex + 1} of {totalPages}
+            </div>
+          )}
         </div>
-        <div
-          style={{
-            fontSize: V.xs,
-            color: V.textSecondary,
-            textAlign: 'center',
-            fontFamily: V.font,
-          }}
-        >
-          Page {currentPageIndex + 1} of {totalPages}
-        </div>
-      </div>
+      )}
 
       {/* Page Content */}
-      <div style={{ flex: 1, overflow: 'auto', padding: V.s4 }}>
+      <div style={{ flex: 1, overflow: 'auto', padding: contentPad }}>
         <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+          {/* Logo */}
+          {logoUrl && (
+            <img
+              src={logoUrl}
+              alt="Company Logo"
+              style={{
+                height: '40px',
+                marginBottom: V.s3,
+                objectFit: 'contain',
+              }}
+            />
+          )}
+
           {/* Page Title */}
           {currentPage.title && (
             <h1
@@ -115,7 +142,7 @@ export function PreviewProgress({
           )}
 
           {/* Sections */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: V.s4 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: sectionGap }}>
             {currentPage.sections?.map((section) => (
               <div key={section.id}>
                 {/* Section Title */}
@@ -144,7 +171,7 @@ export function PreviewProgress({
                           ?.map((col) => `${(col / 12) * 100}%`)
                           .join(' ')
                           || '1fr',
-                        gap: V.s3,
+                        gap: rowGap,
                       }}
                     >
                       {row.cells?.map((cell) => (
@@ -206,7 +233,7 @@ export function PreviewProgress({
               padding: `${V.s2} ${V.s4}`,
               border: 'none',
               borderRadius: V.r2,
-              backgroundColor: V.primary,
+              backgroundColor: brandColor,
               color: V.bgSurface,
               cursor: 'pointer',
               fontSize: V.sm,
@@ -224,7 +251,7 @@ export function PreviewProgress({
               padding: `${V.s2} ${V.s4}`,
               border: 'none',
               borderRadius: V.r2,
-              backgroundColor: V.primary,
+              backgroundColor: brandColor,
               color: V.bgSurface,
               cursor: 'pointer',
               fontSize: V.sm,

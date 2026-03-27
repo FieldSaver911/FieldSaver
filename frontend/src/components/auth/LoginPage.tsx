@@ -28,7 +28,7 @@ export function LoginPage() {
     setIsLoading(true);
     try {
       await login({ email: email.trim(), password });
-      navigate('/builder', { replace: true });
+      navigate('/forms', { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 401) {
