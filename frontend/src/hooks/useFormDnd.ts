@@ -48,7 +48,7 @@ export function useFormDnd() {
       }
 
       // Row drag handling — within and across sections
-      if (activeData.kind === 'row' && overData?.accepts === 'row') {
+      if (activeData.kind === 'row' && (overData?.kind === 'row' || overData?.accepts === 'row')) {
         const fromPageId = activeData.pageId;
         const fromSectionId = activeData.sectionId;
         const fromRowId = activeData.rowId;
@@ -83,13 +83,31 @@ export function useFormDnd() {
       }
 
       // Section drag handling
-      if (activeData.kind === 'section' && overData?.accepts === 'section') {
+      if (activeData.kind === 'section' && (overData?.kind === 'section' || overData?.accepts === 'section')) {
         const fromPageId = activeData.pageId;
         const fromSectionId = activeData.sectionId;
         const toPageId = overData.pageId;
-        const toInsertIndex = overData.insertIndex ?? 0;
 
-        moveSection(fromPageId, fromSectionId, toPageId, toInsertIndex);
+        // Same page reorder: use over.id (which is a section ID) to determine insert position
+        if (fromPageId === toPageId) {
+          const page = form.data.pages.find((p) => p.id === fromPageId);
+
+          if (page && over.id !== fromSectionId) {
+            const fromIndex = page.sections.findIndex((s) => s.id === fromSectionId);
+            const toIndex = page.sections.findIndex((s) => s.id === over.id);
+
+            // Only move if indices differ
+            if (fromIndex !== toIndex) {
+              // Insert at the target section position
+              const insertIndex = fromIndex < toIndex ? toIndex : toIndex;
+              moveSection(fromPageId, fromSectionId, toPageId, insertIndex);
+            }
+          }
+        } else {
+          // Cross-page move — use insertIndex from drop zone (Page level sentinel)
+          const toInsertIndex = overData.insertIndex ?? 0;
+          moveSection(fromPageId, fromSectionId, toPageId, toInsertIndex);
+        }
       }
 
       // Column (cell) drag handling

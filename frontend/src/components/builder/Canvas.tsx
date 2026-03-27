@@ -669,7 +669,6 @@ function RowView({
     <div
       ref={setSortableNodeRef}
       {...sortableAttributes}
-      {...sortableListeners}
       onDragEnd={handleDragEnd}
       style={{
         marginBottom: V.s3,
@@ -699,8 +698,9 @@ function RowView({
             borderRadius: `${V.r4} ${V.r4} 0 0`,
           }}
         >
-          {/* Drag handle */}
+          {/* Drag handle — ONLY this element is draggable */}
           <span
+            {...sortableListeners}
             style={{
               color: V.textDisabled,
               cursor: 'grab',
@@ -1030,7 +1030,6 @@ function SectionView({
     <div
       ref={setSortableSectionRef}
       {...sortableSectionAttributes}
-      {...sortableSectionListeners}
       style={{
         marginBottom: V.s4,
         border: `1.5px solid ${V.borderLight}`,
@@ -1057,6 +1056,21 @@ function SectionView({
         }}
         onClick={(e) => { e.stopPropagation(); setCollapsed((c) => !c); }}
       >
+        {/* Drag handle — ONLY this element is draggable */}
+        <span
+          {...sortableSectionListeners}
+          style={{
+            color: V.textDisabled,
+            cursor: 'grab',
+            display: 'flex',
+            alignItems: 'center',
+            flexShrink: 0,
+          }}
+          title="Drag to reorder section"
+        >
+          <IconDragHandle />
+        </span>
+
         {/* Chevron */}
         <span
           style={{
