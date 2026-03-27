@@ -193,6 +193,24 @@ When working in this codebase, these terms have specific meanings:
 
 ---
 
+---
+
+## Important: Reference vs. Implementation Files
+
+### ⚠️ HTML Files (REFERENCE ONLY)
+**DO NOT EDIT** the following files — they are for reference/documentation only:
+- `HTML/form-builder copy.html` — Legacy single-file artifact
+- `HTML/form-builder.html` — Legacy reference implementation
+
+These files are **outdated snapshots**. All real work happens in the monorepo structure:
+- Frontend components live in `frontend/src/components/`
+- Form state in `frontend/src/stores/`
+- Form logic in `backend/src/services/`
+
+If you're asked to work on form builder features, implement them in the proper monorepo structure, **not** in the HTML files.
+
+---
+
 ## Related Files
 
 - Full product spec: @docs/spec.md (if present) or see `fieldsaver-form-builder-spec.docx`
