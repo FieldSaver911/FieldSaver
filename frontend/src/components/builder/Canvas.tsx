@@ -750,12 +750,16 @@ function RowView({
             padding: V.s3,
           }}
         >
-          {row.cells.map((cell, idx) => (
+          {row.cells.map((cell, idx) => {
+            const flexPct = `${(liveCols[idx] / totalCols) * 100}%`;
+            return (
             <div
               key={cell.id}
               style={{
                 position: 'relative',
-                flex: `0 0 ${(liveCols[idx] / totalCols) * 100}%`,
+                flex: `0 0 ${flexPct}`,
+                maxWidth: flexPct,
+                minWidth: 0,
               }}
             >
               <CellView
@@ -831,7 +835,8 @@ function RowView({
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
