@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Row, Section, Cell, Field, ColPreset, Page } from '@fieldsaver/shared';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { useDroppable } from '@dnd-kit/core';
 import { V } from '../../constants/design';
 import { COL_PRESETS, spanLabel } from '../../constants/fieldTypes';
 import { FieldCard } from './FieldCard';
@@ -921,6 +922,43 @@ function RowView({
   );
 }
 
+// ─── DropZoneSentinel ─────────────────────────────────────────────────────────
+
+interface DropZoneSentinelProps {
+  id: string;
+  sectionId: string;
+  pageId: string;
+  isVisible?: boolean;
+}
+
+/**
+ * Invisible drop zone sentinel for accepting rows dragged from other sections.
+ * Positioned at the end of a section's row list.
+ */
+function DropZoneSentinel({ id, sectionId, pageId, isVisible = false }: DropZoneSentinelProps) {
+  const { setNodeRef } = useDroppable({
+    id,
+    data: {
+      accepts: 'row',
+      sectionId,
+      pageId,
+      insertIndex: 999, // Insert at end
+    },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        height: isVisible ? '2px' : '0px',
+        backgroundColor: isVisible ? V.primary : 'transparent',
+        margin: isVisible ? `${V.s2} 0` : '0',
+        borderRadius: '1px',
+      }}
+    />
+  );
+}
+
 // ─── SectionView ──────────────────────────────────────────────────────────────
 
 interface SectionViewProps {
@@ -1148,6 +1186,14 @@ function SectionView({
                 )}
               </SortableItem>
             ))}
+
+            {/* Drop zone for rows dragged from other sections (invisible sentinel) */}
+            <DropZoneSentinel
+              id={`drop-zone-${section.id}`}
+              sectionId={section.id}
+              pageId={pageId}
+              isVisible={false}
+            />
           </SortableContext>
 
           {/* Add Row button + preset menu */}

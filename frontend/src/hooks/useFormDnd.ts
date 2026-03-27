@@ -48,39 +48,36 @@ export function useFormDnd() {
       }
 
       // Row drag handling — within and across sections
-      if (activeData.kind === 'row') {
+      if (activeData.kind === 'row' && overData?.accepts === 'row') {
         const fromPageId = activeData.pageId;
         const fromSectionId = activeData.sectionId;
         const fromRowId = activeData.rowId;
+        const toPageId = overData.pageId;
+        const toSectionId = overData.sectionId;
 
-        // Same section reorder: use over.id which is a row ID to determine insert position
-        if (
-          overData?.accepts === 'row' &&
-          fromSectionId === overData.sectionId &&
-          fromPageId === overData.pageId
-        ) {
-          // Find insert index by comparing row positions
+        // Same section reorder: use over.id (which is a row ID) to determine insert position
+        if (fromSectionId === toSectionId && fromPageId === toPageId) {
           const section = form.data.pages
             .find((p) => p.id === fromPageId)
             ?.sections.find((s) => s.id === fromSectionId);
 
-          if (section) {
+          if (section && over.id !== fromRowId) {
             const fromIndex = section.rows.findIndex((r) => r.id === fromRowId);
             const toIndex = section.rows.findIndex((r) => r.id === over.id);
 
             // Only move if indices differ
             if (fromIndex !== toIndex) {
-              // When dragging over a row, insert before that row (or after if dragging down)
+              // Insert at the target row position
               const insertIndex = fromIndex < toIndex ? toIndex : toIndex;
-              moveRow(fromPageId, fromSectionId, fromRowId, fromPageId, fromSectionId, insertIndex);
+              moveRow(fromPageId, fromSectionId, fromRowId, toPageId, toSectionId, insertIndex);
             }
           }
-        } else if (overData?.accepts === 'row') {
-          // Cross-section move
-          const toPageId = overData.pageId;
-          const toSectionId = overData.sectionId;
-          const toInsertIndex = overData.insertIndex ?? 0;
-
+        } else {
+          // Cross-section (or cross-page) move — use insertIndex from drop zone
+          const targetSection = form.data.pages
+            .find((p) => p.id === toPageId)
+            ?.sections.find((s) => s.id === toSectionId);
+          const toInsertIndex = overData.insertIndex ?? targetSection?.rows.length ?? 0;
           moveRow(fromPageId, fromSectionId, fromRowId, toPageId, toSectionId, toInsertIndex);
         }
       }
