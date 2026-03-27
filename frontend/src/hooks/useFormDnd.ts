@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { DragEndEvent, DragOverEvent } from '@dnd-kit/core';
+import { DragStartEvent, DragEndEvent, DragOverEvent } from '@dnd-kit/core';
 import { useFormStore } from '../stores/useFormStore';
 import type { DragItemData } from '../components/dnd/types';
 
@@ -18,8 +18,12 @@ export function useFormDnd() {
   const moveSection = useFormStore((state) => state.moveSection);
   const moveColumn = useFormStore((state) => state.moveColumn);
 
-  const handleDragStart = useCallback(() => {
-    // This is called by DndContext; we set activeItem on dragStart event
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    // Set active item for DragOverlay preview
+    const data = event.active.data.current as DragItemData | undefined;
+    if (data) {
+      setActiveItem(data);
+    }
   }, []);
 
   const handleDragOver = useCallback((_event: DragOverEvent) => {
@@ -35,19 +39,50 @@ export function useFormDnd() {
         return;
       }
 
-      const activeData = active.data.current as DragItemData;
+      const activeData = active.data.current as DragItemData | undefined;
       const overData = over.data.current as any;
 
-      // Row drag handling
-      if (activeData.kind === 'row' && overData?.accepts === 'row') {
+      if (!activeData) {
+        setActiveItem(null);
+        return;
+      }
+
+      // Row drag handling — within and across sections
+      if (activeData.kind === 'row') {
         const fromPageId = activeData.pageId;
         const fromSectionId = activeData.sectionId;
         const fromRowId = activeData.rowId;
-        const toPageId = overData.pageId;
-        const toSectionId = overData.sectionId;
-        const toInsertIndex = overData.insertIndex ?? 0;
 
-        moveRow(fromPageId, fromSectionId, fromRowId, toPageId, toSectionId, toInsertIndex);
+        // Same section reorder: use over.id which is a row ID to determine insert position
+        if (
+          overData?.accepts === 'row' &&
+          fromSectionId === overData.sectionId &&
+          fromPageId === overData.pageId
+        ) {
+          // Find insert index by comparing row positions
+          const section = form.data.pages
+            .find((p) => p.id === fromPageId)
+            ?.sections.find((s) => s.id === fromSectionId);
+
+          if (section) {
+            const fromIndex = section.rows.findIndex((r) => r.id === fromRowId);
+            const toIndex = section.rows.findIndex((r) => r.id === over.id);
+
+            // Only move if indices differ
+            if (fromIndex !== toIndex) {
+              // When dragging over a row, insert before that row (or after if dragging down)
+              const insertIndex = fromIndex < toIndex ? toIndex : toIndex;
+              moveRow(fromPageId, fromSectionId, fromRowId, fromPageId, fromSectionId, insertIndex);
+            }
+          }
+        } else if (overData?.accepts === 'row') {
+          // Cross-section move
+          const toPageId = overData.pageId;
+          const toSectionId = overData.sectionId;
+          const toInsertIndex = overData.insertIndex ?? 0;
+
+          moveRow(fromPageId, fromSectionId, fromRowId, toPageId, toSectionId, toInsertIndex);
+        }
       }
 
       // Section drag handling

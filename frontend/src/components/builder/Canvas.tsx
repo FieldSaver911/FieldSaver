@@ -1,9 +1,11 @@
 import React from 'react';
 import type { Row, Section, Cell, Field, ColPreset, Page } from '@fieldsaver/shared';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { V } from '../../constants/design';
 import { COL_PRESETS, spanLabel } from '../../constants/fieldTypes';
 import { FieldCard } from './FieldCard';
 import { LayoutPicker } from './LayoutPicker';
+import { SortableItem } from '../dnd/SortableItem';
 
 // ─── Drag state (module-level, simple approach) ───────────────────────────────
 
@@ -477,6 +479,8 @@ function CellView({
 
 interface RowViewProps {
   row: Row;
+  pageId?: string;
+  sectionId?: string;
   selectedFieldId: string | null;
   onSelectField: (id: string) => void;
   onDeleteField: (id: string) => void;
@@ -489,10 +493,18 @@ interface RowViewProps {
   onCanvasDragEnd: () => void;
   onColumnDragStart?: (payload: ColumnDrag) => void;
   onColumnDropToSection?: (pageId: string, secId: string) => void;
+  // DnD props from SortableItem (optional, for when wrapped in SortableItem)
+  setSortableNodeRef?: (element: HTMLElement | null) => void;
+  sortableAttributes?: Record<string, any>;
+  sortableListeners?: Record<string, any>;
+  sortableStyle?: React.CSSProperties;
+  sortableIsDragging?: boolean;
 }
 
 function RowView({
   row,
+  pageId,
+  sectionId,
   selectedFieldId,
   onSelectField,
   onDeleteField,
@@ -505,6 +517,11 @@ function RowView({
   onCanvasDragEnd,
   onColumnDragStart,
   onColumnDropToSection,
+  setSortableNodeRef,
+  sortableAttributes,
+  sortableListeners,
+  sortableStyle,
+  sortableIsDragging,
 }: RowViewProps) {
   const [showLayoutPicker, setShowLayoutPicker] = React.useState(false);
   const [addColHovered, setAddColHovered] = React.useState(false);
@@ -649,9 +666,14 @@ function RowView({
 
   return (
     <div
+      ref={setSortableNodeRef}
+      {...sortableAttributes}
+      {...sortableListeners}
       onDragEnd={handleDragEnd}
       style={{
         marginBottom: V.s3,
+        ...sortableStyle,
+        opacity: sortableIsDragging ? 0.4 : 1,
       }}
     >
       {/* White card containing the row */}
@@ -920,10 +942,12 @@ interface SectionViewProps {
   onCanvasDragEnd: () => void;
   onColumnDragStart?: (payload: ColumnDrag) => void;
   onColumnDropToSection?: (pageId: string, secId: string) => void;
+  onMoveRow?: (fromPageId: string, fromSectionId: string, fromRowId: string, toPageId: string, toSectionId: string, toInsertIndex: number) => void;
 }
 
 function SectionView({
   section,
+  pageId,
   selectedFieldId,
   onSelectSection,
   onSelectField,
@@ -940,6 +964,7 @@ function SectionView({
   onCanvasDragEnd,
   onColumnDragStart,
   onColumnDropToSection,
+  onMoveRow,
 }: SectionViewProps) {
   const [collapsed, setCollapsed] = React.useState(false);
   const [showRowMenu, setShowRowMenu] = React.useState(false);
@@ -1084,25 +1109,46 @@ function SectionView({
             backgroundColor: V.bgApp,
           }}
         >
-          {/* Rows */}
-          {section.rows.map((row) => (
-            <RowView
-              key={row.id}
-              row={row}
-              selectedFieldId={selectedFieldId}
-              onSelectField={onSelectField}
-              onDeleteField={onDeleteField}
-              onDeleteRow={(rowId) => onDeleteRow(section.id, rowId)}
-              onUpdateRow={(rowId, patch) => onUpdateRow(section.id, rowId, patch)}
-              onAddFieldToCell={onAddFieldToCell}
-              dragState={dragState}
-              onCanvasDragStart={onCanvasDragStart}
-              onCanvasDrop={onCanvasDrop}
-              onCanvasDragEnd={onCanvasDragEnd}
-              onColumnDragStart={onColumnDragStart}
-              onColumnDropToSection={onColumnDropToSection}
-            />
-          ))}
+          {/* Rows wrapped in SortableContext */}
+          <SortableContext items={section.rows.map(r => r.id)} strategy={verticalListSortingStrategy}>
+            {section.rows.map((row) => (
+              <SortableItem
+                key={row.id}
+                id={row.id}
+                data={{
+                  kind: 'row',
+                  rowId: row.id,
+                  sectionId: section.id,
+                  pageId,
+                }}
+              >
+                {(sortableProps) => (
+                  <RowView
+                    row={row}
+                    pageId={pageId}
+                    sectionId={section.id}
+                    selectedFieldId={selectedFieldId}
+                    onSelectField={onSelectField}
+                    onDeleteField={onDeleteField}
+                    onDeleteRow={(rowId) => onDeleteRow(section.id, rowId)}
+                    onUpdateRow={(rowId, patch) => onUpdateRow(section.id, rowId, patch)}
+                    onAddFieldToCell={onAddFieldToCell}
+                    dragState={dragState}
+                    onCanvasDragStart={onCanvasDragStart}
+                    onCanvasDrop={onCanvasDrop}
+                    onCanvasDragEnd={onCanvasDragEnd}
+                    onColumnDragStart={onColumnDragStart}
+                    onColumnDropToSection={onColumnDropToSection}
+                    setSortableNodeRef={sortableProps.setNodeRef}
+                    sortableAttributes={sortableProps.attributes}
+                    sortableListeners={sortableProps.listeners}
+                    sortableStyle={sortableProps.style}
+                    sortableIsDragging={sortableProps.isDragging}
+                  />
+                )}
+              </SortableItem>
+            ))}
+          </SortableContext>
 
           {/* Add Row button + preset menu */}
           <div style={{ position: 'relative', marginTop: section.rows.length > 0 ? V.s2 : 0 }}>
