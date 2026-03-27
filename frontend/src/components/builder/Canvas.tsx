@@ -936,9 +936,18 @@ function SectionView({
   React.useEffect(() => {
     if (showRowMenu && addRowButtonRef.current) {
       const rect = addRowButtonRef.current.getBoundingClientRect();
-      // Use button width but cap at 400px to prevent overflow
-      const menuWidth = Math.min(rect.width, 400);
-      setMenuPos({ top: rect.bottom + 8, left: rect.left, width: menuWidth });
+      const menuHeight = 350; // Approximate height of menu
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+
+      // Position above if not enough space below
+      const positionAbove = spaceBelow < menuHeight && spaceAbove > menuHeight;
+      const top = positionAbove ? rect.top - menuHeight - 8 : rect.bottom + 8;
+
+      // Compact width (narrower than button)
+      const menuWidth = 280;
+
+      setMenuPos({ top, left: rect.left, width: menuWidth });
     }
   }, [showRowMenu]);
 
@@ -1130,14 +1139,80 @@ function SectionView({
             </button>
 
             {showRowMenu && menuPos && (
-              <LayoutPicker
-                onSelect={(preset) => {
-                  onAddRow(section.id, preset);
-                  setShowRowMenu(false);
-                }}
-                onClose={() => setShowRowMenu(false)}
-                position={menuPos}
-              />
+              <>
+                {/* Backdrop */}
+                <div
+                  style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    zIndex: 9998,
+                  }}
+                  onClick={() => setShowRowMenu(false)}
+                />
+                {/* Menu - compact vertical layout */}
+                <div
+                  style={{
+                    position: 'fixed',
+                    top: `${menuPos.top}px`,
+                    left: `${menuPos.left}px`,
+                    width: `${menuPos.width}px`,
+                    zIndex: 9999,
+                    backgroundColor: V.bgSurface,
+                    border: `1px solid ${V.borderLight}`,
+                    borderRadius: V.r3,
+                    boxShadow: V.shadow2,
+                    padding: V.s2,
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(2, 1fr)',
+                    gap: V.s1,
+                    maxHeight: 'calc(100vh - 100px)',
+                    overflowY: 'auto',
+                    overflowX: 'hidden',
+                    boxSizing: 'border-box',
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {COL_PRESETS.map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => {
+                        onAddRow(section.id, preset);
+                        setShowRowMenu(false);
+                      }}
+                      title={preset.hint}
+                      style={{
+                        padding: `${V.s1} ${V.s2}`,
+                        border: `1px solid ${V.borderLight}`,
+                        borderRadius: V.r2,
+                        backgroundColor: V.bgApp,
+                        color: V.textPrimary,
+                        cursor: 'pointer',
+                        fontSize: V.sm,
+                        fontFamily: V.font,
+                        transition: 'all 0.1s',
+                        whiteSpace: 'normal',
+                        textAlign: 'center',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = V.primary;
+                        e.currentTarget.style.backgroundColor = V.primaryBg;
+                        e.currentTarget.style.color = V.primary;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = V.borderLight;
+                        e.currentTarget.style.backgroundColor = V.bgApp;
+                        e.currentTarget.style.color = V.textPrimary;
+                      }}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         </div>
