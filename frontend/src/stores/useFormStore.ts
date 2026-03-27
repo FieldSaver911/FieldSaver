@@ -39,6 +39,28 @@ interface FormStore {
 
   // Actions — rows
   setRows: (rows: Row[]) => void;
+  moveRow: (
+    fromPageId: string,
+    fromSectionId: string,
+    fromRowId: string,
+    toPageId: string,
+    toSectionId: string,
+    toInsertIndex: number
+  ) => void;
+  moveSection: (
+    fromPageId: string,
+    fromSectionId: string,
+    toPageId: string,
+    toInsertIndex: number
+  ) => void;
+  moveColumn: (
+    fromPageId: string,
+    fromSectionId: string,
+    fromRowId: string,
+    fromCellId: string,
+    toPageId: string,
+    toSectionId: string
+  ) => void;
 
   // Actions — settings
   updateSettings: (patch: Partial<FormSettings>) => void;
@@ -249,6 +271,221 @@ export const useFormStore = create<FormStore>((set, get) => ({
   setRows: (rows: Row[]) => {
     const { activePId, activeSId } = get();
     if (activePId && activeSId) get().patchSection(activePId, activeSId, { rows });
+  },
+
+  moveRow: (
+    fromPageId: string,
+    fromSectionId: string,
+    fromRowId: string,
+    toPageId: string,
+    toSectionId: string,
+    toInsertIndex: number
+  ) => {
+    set((state) => {
+      if (!state.form) return {};
+
+      const rowToMove = state.form.data.pages
+        .find((p) => p.id === fromPageId)
+        ?.sections.find((s) => s.id === fromSectionId)
+        ?.rows.find((r) => r.id === fromRowId);
+
+      if (!rowToMove) return {};
+
+      let updatedPages = state.form.data.pages;
+
+      // Remove row from source section
+      updatedPages = updatedPages.map((page) =>
+        page.id !== fromPageId
+          ? page
+          : {
+              ...page,
+              sections: page.sections.map((section) =>
+                section.id !== fromSectionId
+                  ? section
+                  : {
+                      ...section,
+                      rows: section.rows.filter((r) => r.id !== fromRowId),
+                    }
+              ),
+            }
+      );
+
+      // Insert row into target section at insertIndex
+      updatedPages = updatedPages.map((page) =>
+        page.id !== toPageId
+          ? page
+          : {
+              ...page,
+              sections: page.sections.map((section) =>
+                section.id !== toSectionId
+                  ? section
+                  : {
+                      ...section,
+                      rows: [
+                        ...section.rows.slice(0, toInsertIndex),
+                        rowToMove,
+                        ...section.rows.slice(toInsertIndex),
+                      ],
+                    }
+              ),
+            }
+      );
+
+      const form = { ...state.form, data: { ...state.form.data, pages: updatedPages } };
+      const activePage = updatedPages.find((p) => p.id === state.activePId) ?? state.activePage;
+      const activeSection = activePage?.sections.find((s) => s.id === state.activeSId) ?? state.activeSection;
+
+      return { form, activePage, activeSection, isDirty: true };
+    });
+  },
+
+  moveSection: (
+    fromPageId: string,
+    fromSectionId: string,
+    toPageId: string,
+    toInsertIndex: number
+  ) => {
+    set((state) => {
+      if (!state.form) return {};
+
+      const sectionToMove = state.form.data.pages
+        .find((p) => p.id === fromPageId)
+        ?.sections.find((s) => s.id === fromSectionId);
+
+      if (!sectionToMove) return {};
+
+      let updatedPages = state.form.data.pages;
+
+      // Remove section from source page
+      updatedPages = updatedPages.map((page) =>
+        page.id !== fromPageId
+          ? page
+          : {
+              ...page,
+              sections: page.sections.filter((s) => s.id !== fromSectionId),
+            }
+      );
+
+      // Insert section into target page at insertIndex
+      updatedPages = updatedPages.map((page) =>
+        page.id !== toPageId
+          ? page
+          : {
+              ...page,
+              sections: [
+                ...page.sections.slice(0, toInsertIndex),
+                sectionToMove,
+                ...page.sections.slice(toInsertIndex),
+              ],
+            }
+      );
+
+      const form = { ...state.form, data: { ...state.form.data, pages: updatedPages } };
+      const activePage = updatedPages.find((p) => p.id === state.activePId) ?? state.activePage;
+      const activeSection = activePage?.sections.find((s) => s.id === state.activeSId) ?? state.activeSection;
+
+      return { form, activePage, activeSection, isDirty: true };
+    });
+  },
+
+  moveColumn: (
+    fromPageId: string,
+    fromSectionId: string,
+    fromRowId: string,
+    fromCellId: string,
+    toPageId: string,
+    toSectionId: string
+  ) => {
+    set((state) => {
+      if (!state.form) return {};
+
+      let cellToMove: any = null;
+      let updatedPages = state.form.data.pages;
+
+      // Find and remove the cell from source row
+      updatedPages = updatedPages.map((page) =>
+        page.id !== fromPageId
+          ? page
+          : {
+              ...page,
+              sections: page.sections.map((section) =>
+                section.id !== fromSectionId
+                  ? section
+                  : {
+                      ...section,
+                      rows: section.rows
+                        .map((row) => {
+                          if (row.id !== fromRowId) return row;
+
+                          // Found the source row; find and extract the cell
+                          const cellIndex = row.cells.findIndex((c) => c.id === fromCellId);
+                          if (cellIndex === -1) return row;
+
+                          cellToMove = row.cells[cellIndex];
+
+                          // Remove cell and redistribute column spans evenly among remaining cells
+                          const remainingCells = row.cells.filter((c) => c.id !== fromCellId);
+                          if (remainingCells.length === 0) {
+                            // Row is now empty; mark it for deletion
+                            return { ...row, _delete: true } as any;
+                          }
+
+                          // Redistribute spans evenly: 12 columns / number of remaining cells
+                          const newColCount = remainingCells.length;
+                          const newColWidth = Math.floor(12 / newColCount);
+                          const remainder = 12 % newColCount;
+
+                          return {
+                            ...row,
+                            cells: remainingCells.map((cell, idx) => ({
+                              ...cell,
+                              span: newColWidth + (idx < remainder ? 1 : 0),
+                            })),
+                          };
+                        })
+                        .filter((row) => !(row as any)._delete), // Remove empty rows
+                    }
+              ),
+            }
+      );
+
+      if (!cellToMove) return {};
+
+      // Create new full-width row with the moved cell
+      const newRow: Row = {
+        id: Math.random().toString(36).slice(2, 9),
+        preset: { label: '1 Column (Full)', hint: '', cols: [12] },
+        cells: [
+          {
+            ...cellToMove,
+            span: 12, // Full width
+          },
+        ],
+      };
+
+      // Append new row to target section
+      updatedPages = updatedPages.map((page) =>
+        page.id !== toPageId
+          ? page
+          : {
+              ...page,
+              sections: page.sections.map((section) =>
+                section.id !== toSectionId
+                  ? section
+                  : {
+                      ...section,
+                      rows: [...section.rows, newRow],
+                    }
+              ),
+            }
+      );
+
+      const form = { ...state.form, data: { ...state.form.data, pages: updatedPages } };
+      const activePage = updatedPages.find((p) => p.id === state.activePId) ?? state.activePage;
+      const activeSection = activePage?.sections.find((s) => s.id === state.activeSId) ?? state.activeSection;
+
+      return { form, activePage, activeSection, isDirty: true };
+    });
   },
 
   updateSettings: (patch) => {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { ColPreset, Field, Page, Row, Section } from '@fieldsaver/shared';
+import { DndContext, DragOverlay } from '@dnd-kit/core';
 import { V } from '../constants/design';
 import { Sidebar } from '../components/builder/Sidebar';
 import { FieldTypesSidebar } from '../components/builder/FieldTypesSidebar';
@@ -8,7 +9,10 @@ import { Canvas, setPaletteDragActive } from '../components/builder/Canvas';
 import { SettingsPanel } from '../components/builder/SettingsPanel';
 import { FormSettingsPage } from '../components/settings/FormSettingsPage';
 import { PreviewModal } from '../components/preview/PreviewModal';
+import { DragOverlayContent } from '../components/dnd/DragOverlayContent';
 import { useForm } from '../hooks/useForm';
+import { useFormDnd } from '../hooks/useFormDnd';
+import { useDndSensors } from '../components/dnd/useDndSensors';
 import { useFormStore } from '../stores/useFormStore';
 import { formsApi } from '../api/forms';
 
@@ -465,6 +469,11 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
   const [showSettings, setShowSettings] = React.useState(false);
   const [columnDrag, setColumnDrag] = React.useState<ColumnDrag | null>(null);
 
+  // DnD setup
+  const dndSensors = useDndSensors();
+  const { activeItem, handleDragStart, handleDragOver, handleDragEnd, handleDragCancel } =
+    useFormDnd();
+
   const form = useFormStore((s) => s.form);
   const {
     isLoading,
@@ -748,68 +757,81 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
         onBack={() => navigate('/forms')}
       />
 
-      {/* Three-panel body */}
-      <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          overflow: 'hidden',
-        }}
+      {/* Three-panel body wrapped in DndContext */}
+      <DndContext
+        sensors={dndSensors}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
       >
-        {/* Left: Pages/Sections Sidebar */}
-        <Sidebar
-          pages={pages}
-          activePId={activePId}
-          activeSId={activeSId}
-          onSelectPage={setActivePage}
-          onSelectSection={handleSelectSection}
-          onAddPage={addPage}
-          onDeletePage={deletePage}
-          onRenamePage={renamePage}
-          onAddSection={handleSidebarAddSection}
-          onDeleteSection={handleSidebarDeleteSection}
-          columnDrag={columnDrag}
-        />
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Left: Pages/Sections Sidebar */}
+          <Sidebar
+            pages={pages}
+            activePId={activePId}
+            activeSId={activeSId}
+            onSelectPage={setActivePage}
+            onSelectSection={handleSelectSection}
+            onAddPage={addPage}
+            onDeletePage={deletePage}
+            onRenamePage={renamePage}
+            onAddSection={handleSidebarAddSection}
+            onDeleteSection={handleSidebarDeleteSection}
+            columnDrag={columnDrag}
+          />
 
-        {/* Center-Left: Field Types Sidebar */}
-        <FieldTypesSidebar
-          onAddField={addField}
-          onPaletteDragStart={handlePaletteDragStart}
-          onPaletteDragEnd={handlePaletteDragEnd}
-        />
+          {/* Center-Left: Field Types Sidebar */}
+          <FieldTypesSidebar
+            onAddField={addField}
+            onPaletteDragStart={handlePaletteDragStart}
+            onPaletteDragEnd={handlePaletteDragEnd}
+          />
 
-        {/* Center: Canvas */}
-        <Canvas
-          activePage={activePage}
-          activeSId={activeSId}
-          activePageId={activePId}
-          selectedFieldId={selectedFieldId}
-          onSelectSection={handleSelectSection}
-          onSelectField={handleSelectField}
-          onDeleteField={handleDeleteField}
-          onDeleteRow={deleteRow}
-          onMoveField={moveField}
-          onDeleteSection={handleDeleteSectionCb}
-          onAddRow={handleAddRow}
-          onAddFieldToCell={addFieldToCell}
-          onUpdateSection={handleUpdateSectionCb}
-          onUpdateRow={handleUpdateRowCb}
-          onAddSection={addSection}
-          onColumnDragStart={setColumnDrag}
-          onColumnDropToSection={handleColumnDropToSection}
-          columnDrag={columnDrag}
-        />
+          {/* Center: Canvas */}
+          <Canvas
+            activePage={activePage}
+            activeSId={activeSId}
+            activePageId={activePId}
+            selectedFieldId={selectedFieldId}
+            onSelectSection={handleSelectSection}
+            onSelectField={handleSelectField}
+            onDeleteField={handleDeleteField}
+            onDeleteRow={deleteRow}
+            onMoveField={moveField}
+            onDeleteSection={handleDeleteSectionCb}
+            onAddRow={handleAddRow}
+            onAddFieldToCell={addFieldToCell}
+            onUpdateSection={handleUpdateSectionCb}
+            onUpdateRow={handleUpdateRowCb}
+            onAddSection={addSection}
+            onColumnDragStart={setColumnDrag}
+            onColumnDropToSection={handleColumnDropToSection}
+            columnDrag={columnDrag}
+          />
 
-        {/* Right: Settings panel */}
-        <SettingsPanel
-          selectedField={selectedField}
-          activePage={activePage ? { id: activePage.id, title: activePage.title, description: activePage.description, sections: activePage.sections } : null}
-          activeSection={activeSection}
-          onUpdateField={handleUpdateField}
-          onUpdatePage={handleUpdatePage}
-          onUpdateSection={handleUpdateSectionSettings}
-        />
-      </div>
+          {/* Right: Settings panel */}
+          <SettingsPanel
+            selectedField={selectedField}
+            activePage={activePage ? { id: activePage.id, title: activePage.title, description: activePage.description, sections: activePage.sections } : null}
+            activeSection={activeSection}
+            onUpdateField={handleUpdateField}
+            onUpdatePage={handleUpdatePage}
+            onUpdateSection={handleUpdateSectionSettings}
+          />
+        </div>
+
+        {/* DragOverlay for visual feedback */}
+        <DragOverlay>
+          <DragOverlayContent activeItem={activeItem} />
+        </DragOverlay>
+      </DndContext>
 
       {/* Settings Modal */}
       {showSettings && form && (
