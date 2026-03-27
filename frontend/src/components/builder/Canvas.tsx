@@ -158,7 +158,6 @@ function CellView({
   onColumnDragStart,
   onColumnDropToSection,
 }: CellViewProps) {
-  const widthPct = `${(colSpan / totalCols) * 100}%`;
   const [isOver, setIsOver] = React.useState(false);
   const [headerHovered, setHeaderHovered] = React.useState(false);
 
@@ -253,7 +252,6 @@ function CellView({
       onDragLeave={() => setIsOver(false)}
       onDrop={handleCellDrop}
       style={{
-        width: widthPct,
         minHeight: '130px',
         borderRadius: V.r4,
         backgroundColor: isOver ? V.bgHighlight : V.bgSurface,
