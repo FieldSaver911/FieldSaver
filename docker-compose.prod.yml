@@ -1,0 +1,58 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fieldsaver-postgres-prod
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fieldsaver}
+      POSTGRES_USER: ${POSTGRES_USER:-fieldsaver}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fieldsaver}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fieldsaver-backend-prod
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fieldsaver}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-fieldsaver}
+      NODE_ENV: production
+      JWT_SECRET: ${JWT_SECRET:?required}
+      CORS_ORIGIN: ${CORS_ORIGIN:?required}
+      MONDAY_CLIENT_ID: ${MONDAY_CLIENT_ID:-}
+      MONDAY_CLIENT_SECRET: ${MONDAY_CLIENT_SECRET:-}
+      MONDAY_SIGNING_SECRET: ${MONDAY_SIGNING_SECRET:-}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?required}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    command: >
+      sh -c "node dist/app.js migrate && node dist/app.js"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:?required}
+    container_name: fieldsaver-frontend-prod
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local

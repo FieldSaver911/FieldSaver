@@ -1,0 +1,39 @@
+{
+  "name": "fieldsaver",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "npm run dev --workspace=backend",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "build": "npm run build --workspace=shared && npm run build --workspace=backend && npm run build --workspace=frontend",
+    "build:backend": "npm run build --workspace=backend",
+    "build:frontend": "npm run build --workspace=frontend",
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "npm run test --workspace=backend",
+    "test:frontend": "npm run test --workspace=frontend",
+    "test:e2e": "playwright test",
+    "lint": "eslint . --ext .ts,.tsx --max-warnings 0",
+    "typecheck": "tsc --noEmit -p backend/tsconfig.json && tsc --noEmit -p frontend/tsconfig.json && tsc --noEmit -p shared/tsconfig.json",
+    "db:migrate": "npm run migrate --workspace=backend",
+    "db:migrate:rollback": "npm run migrate:rollback --workspace=backend",
+    "db:migrate:rollback:all": "npm run migrate:rollback:all --workspace=backend",
+    "db:migrate:status": "npm run migrate:status --workspace=backend",
+    "db:migrate:unlock": "npm run migrate:unlock --workspace=backend",
+    "db:seed": "npm run seed --workspace=backend",
+    "db:reset": "npm run db:migrate:rollback:all && npm run db:migrate && npm run db:seed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "concurrently": "^8.2.0",
+    "eslint": "^8.57.0",
+    "typescript": "^5.4.0"
+  }
+}

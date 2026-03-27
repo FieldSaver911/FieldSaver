@@ -1,0 +1,64 @@
+version: '3.9'
+
+services:
+  # ── PostgreSQL ───────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: fieldsaver-postgres
+    environment:
+      POSTGRES_DB: fieldsaver
+      POSTGRES_USER: fieldsaver
+      POSTGRES_PASSWORD: devpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fieldsaver -d fieldsaver"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Backend API ──────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: fieldsaver-backend
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./backend:/app
+      - ./shared:/shared
+      - /app/node_modules
+    environment:
+      DATABASE_URL: postgresql://fieldsaver:devpassword@postgres:5432/fieldsaver
+      NODE_ENV: development
+      PORT: 3001
+      JWT_SECRET: dev-secret-change-in-production-min-32-chars
+      CORS_ORIGIN: http://localhost:5173
+      LOG_LEVEL: info
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: npm run dev
+
+  # ── Frontend SPA ─────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: fieldsaver-frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - ./shared:/shared
+      - /app/node_modules
+    environment:
+      VITE_API_URL: http://localhost:3001
+    command: npm run dev -- --host 0.0.0.0
+
+volumes:
+  postgres_data:
+    driver: local

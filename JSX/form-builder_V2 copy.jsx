@@ -1,0 +1,4331 @@
+import { useState, useRef } from "react";
+
+const V = {
+  primary:"#0073EA", primaryHover:"#0060C0", primaryLight:"#DCEEFF", primaryBg:"#EAF3FF",
+  bgApp:"#F6F7FB", bgSurface:"#FFFFFF", bgHover:"#F0F2F8", bgSelected:"#DCEEFF", bgHighlight:"#EAF3FF",
+  textPrimary:"#323338", textSecondary:"#676879", textDisabled:"#ABADB6",
+  border:"#C3C6D4", borderLight:"#E6E9EF", borderFocus:"#0073EA",
+  positive:"#258750", positiveBg:"#E5F5EC", negative:"#D83A52", negativeBg:"#FCEDEF",
+  warning:"#CB6F00", warningBg:"#FDEFD0",
+  font:"'Figtree','Poppins',-apple-system,sans-serif",
+  xs:"11px", sm:"12px", md:"14px", lg:"16px", xl:"18px",
+  r2:"4px", r3:"6px", r4:"8px", r5:"12px", rFull:"9999px",
+  s1:"4px", s2:"8px", s3:"12px", s4:"16px", s5:"20px", s6:"24px",
+  shadow1:"0 1px 4px rgba(0,0,0,0.08)", shadow2:"0 4px 12px rgba(0,0,0,0.12)", shadow3:"0 8px 28px rgba(0,0,0,0.16)",
+  sidebarBg:"#1C1F3B", sidebarText:"#FFF", sidebarMuted:"rgba(255,255,255,0.6)",
+  sidebarHover:"rgba(255,255,255,0.07)", sidebarActive:"rgba(255,255,255,0.14)", sidebarBorder:"rgba(255,255,255,0.1)",
+};
+const CAT = {
+  basic:    { bg:"#DCEEFF", text:"#0060C0", dot:"#0073EA" },
+  choice:   { bg:"#EDE3FF", text:"#6645CC", dot:"#7C5CBF" },
+  advanced: { bg:"#D4F1E4", text:"#1A6641", dot:"#258750" },
+  layout:   { bg:"#FDEFD0", text:"#7A4100", dot:"#CB6F00" },
+};
+const FIELD_TYPES = [
+  {type:"text",label:"Short Text",icon:"Tt",category:"basic"},{type:"long_text",label:"Long Text",icon:"¶",category:"basic"},
+  {type:"number",label:"Number",icon:"#",category:"basic"},{type:"email",label:"Email",icon:"@",category:"basic"},
+  {type:"phone",label:"Phone",icon:"☏",category:"basic"},{type:"url",label:"URL",icon:"⌁",category:"basic"},
+  {type:"date",label:"Date",icon:"▫",category:"choice"},{type:"time",label:"Time",icon:"◷",category:"choice"},
+  {type:"dropdown",label:"Dropdown",icon:"▾",category:"choice"},{type:"multi_select",label:"Multi-Select",icon:"☑",category:"choice"},
+  {type:"radio",label:"Radio Group",icon:"◉",category:"choice"},{type:"checkbox",label:"Checkbox",icon:"✓",category:"choice"},
+  {type:"rating",label:"Rating",icon:"★",category:"advanced"},{type:"scale",label:"Linear Scale",icon:"⟶",category:"advanced"},
+  {type:"file",label:"File Upload",icon:"↑",category:"advanced"},{type:"signature",label:"Signature",icon:"✍",category:"advanced"},
+  {type:"description",label:"Description",icon:"T",category:"layout"},{type:"divider",label:"Divider",icon:"—",category:"layout"},
+];
+// Grid: 12-column system. cols[] values are column-span units (must sum to 12).
+const GRID_COLS = 12; // total grid columns
+const COL_PRESETS = [
+  {label:"Full",        hint:"12 cols",     cols:[12]},
+  {label:"½+½",         hint:"6+6",         cols:[6,6]},
+  {label:"⅓×3",         hint:"4+4+4",       cols:[4,4,4]},
+  {label:"¼×4",         hint:"3+3+3+3",     cols:[3,3,3,3]},
+  {label:"⅓+⅔",         hint:"4+8",         cols:[4,8]},
+  {label:"⅔+⅓",         hint:"8+4",         cols:[8,4]},
+  {label:"¼+¾",         hint:"3+9",         cols:[3,9]},
+  {label:"¾+¼",         hint:"9+3",         cols:[9,3]},
+  {label:"¼+½+¼",       hint:"3+6+3",       cols:[3,6,3]},
+  {label:"¼+¼+½",       hint:"3+3+6",       cols:[3,3,6]},
+  {label:"½+¼+¼",       hint:"6+3+3",       cols:[6,3,3]},
+  {label:"⅔+⅙+⅙",       hint:"8+2+2",       cols:[8,2,2]},
+  {label:"⅙+⅙+⅔",       hint:"2+2+8",       cols:[2,2,8]},
+  {label:"½+½+½+…",     hint:"2+2+2+2+2+2", cols:[2,2,2,2,2,2]},
+];
+// Convert 12-col spans to flex ratios for CSS
+const colsToFlex = cols => cols.map(c => c / GRID_COLS);
+// Human-readable label for a span unit
+const spanLabel = n => {
+  const map = {1:"1/12",2:"1/6",3:"¼",4:"⅓",5:"5/12",6:"½",7:"7/12",8:"⅔",9:"¾",10:"5/6",11:"11/12",12:"Full"};
+  return map[n] || `${n}/12`;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// UNIFIED DATA LIBRARY SYSTEM
+// Libraries ARE boards. Rows ARE data elements. The "Export Key" column IS the
+// field key that gets mapped to a form field via Browse Keys.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const uid = () => Math.random().toString(36).slice(2,9);
+const fracLabel = w => w===1?"Full":w===.5?"½":w===1/3?"⅓":w===2/3?"⅔":w===.25?"¼":w===.75?"¾":Math.round(w*100)+"%";
+// For 12-col integer spans:
+const spanLbl = n => spanLabel ? spanLabel(n) : (n+"/12");
+
+// ─── Default Data Libraries ──────────────────────────────────────────────────
+// A Library is a Board. A Row is a data element. Columns are the row attributes.
+// The "exportKey" column is the Field Key that gets mapped on Browse Keys.
+
+const SYSTEM_COLUMNS = [
+  { id:"label",       name:"Label",        type:"text",   system:true,  isFieldKey:false },
+  { id:"code",        name:"Code",         type:"text",   system:true,  isFieldKey:false },
+  { id:"exportKey",   name:"Export Key",   type:"text",   system:true,  isFieldKey:true  },
+  { id:"description", name:"Description",  type:"text",   system:true,  isFieldKey:false },
+  { id:"category",    name:"Category",     type:"select", system:true,  isFieldKey:false },
+  { id:"subCategory", name:"Sub-Category", type:"select", system:true,  isFieldKey:false },
+  { id:"usage",       name:"Usage",        type:"select", system:false, isFieldKey:false },
+  { id:"elementId",   name:"Element ID",   type:"text",   system:false, isFieldKey:false },
+];
+
+const DEFAULT_LIBRARIES = [
+  {
+    id: "lib_nemsis35",
+    name: "NEMSIS v3.5",
+    icon: "🚑",
+    description: "National EMS Information System v3.5.1 — data elements, NOT values, Pertinent Negatives, and nillable markers",
+    color: "#0073EA",
+    version: "3.5.1",
+    source: "builtin",
+    mondayBoardId: null,
+    columns: [...SYSTEM_COLUMNS],
+    categories: ["NOT Value","Pertinent Negative","Data Element","Nillable Marker"],
+    subCategories: ["System","Clinical","Administrative","Operational","Patient","Documentation","Response","Times","Dispatch","Scene","Situation","Vitals","History","Procedures","Medications","Arrest","Disposition","Outcome"],
+    permissions: { canView:["admin","editor","viewer"], canEdit:["admin","editor"], canDelete:["admin"] },
+    rows: [
+      // ── NOT Values ──────────────────────────────────────────────────────────
+      { id:"nv_na",  label:"Not Applicable", code:"7701001", exportKey:"notApplicable", description:"Data element not applicable or pertinent to this incident. Clinician-selectable.", category:"NOT Value", subCategory:"System", usage:"Required", elementId:"" },
+      { id:"nv_nr",  label:"Not Recorded",   code:"7701003", exportKey:"notRecorded",   description:"Applicable but left blank — auto-populated by EMS software if nillable.", category:"NOT Value", subCategory:"System", usage:"Required", elementId:"" },
+      { id:"nv_nrp", label:"Not Reporting",  code:"7701005", exportKey:"notReporting",  description:"Not collected by this EMS agency or state. System-populated only.", category:"NOT Value", subCategory:"System", usage:"Required", elementId:"" },
+      // ── Pertinent Negatives ─────────────────────────────────────────────────
+      { id:"pn_01", label:"Contraindication Noted",   code:"8801001", exportKey:"contraindication",    description:"Clinical contraindication prevented this action.", category:"Pertinent Negative", subCategory:"Clinical",        usage:"Required", elementId:"" },
+      { id:"pn_03", label:"Denied By Order",           code:"8801003", exportKey:"deniedByOrder",       description:"Action denied per physician or protocol order.", category:"Pertinent Negative", subCategory:"Administrative",   usage:"Required", elementId:"" },
+      { id:"pn_05", label:"Exam Finding Not Present",  code:"8801005", exportKey:"examFindingNotPresent",description:"Expected clinical finding was not observed.", category:"Pertinent Negative", subCategory:"Clinical",        usage:"Required", elementId:"" },
+      { id:"pn_07", label:"Medication Allergy",        code:"8801007", exportKey:"medicationAllergy",   description:"Patient has a documented allergy to this medication.", category:"Pertinent Negative", subCategory:"Clinical",  usage:"Required", elementId:"" },
+      { id:"pn_09", label:"Medication Already Taken",  code:"8801009", exportKey:"medicationAlreadyTaken",description:"Patient had already taken this medication prior to EMS.", category:"Pertinent Negative", subCategory:"Clinical", usage:"Required", elementId:"" },
+      { id:"pn_13", label:"No Known Drug Allergy",     code:"8801013", exportKey:"noKnownDrugAllergy",  description:"Patient reports no known drug allergies.", category:"Pertinent Negative", subCategory:"Clinical",        usage:"Required", elementId:"" },
+      { id:"pn_15", label:"None Reported",             code:"8801015", exportKey:"noneReported",        description:"Patient reports no relevant history for this element.", category:"Pertinent Negative", subCategory:"Clinical", usage:"Required", elementId:"" },
+      { id:"pn_17", label:"Not Performed by EMS",      code:"8801017", exportKey:"notPerformedByEMS",   description:"This procedure/assessment was not performed by EMS crew.", category:"Pertinent Negative", subCategory:"Operational", usage:"Required", elementId:"" },
+      { id:"pn_19", label:"Refused",                   code:"8801019", exportKey:"refused",             description:"Patient refused this procedure, medication, or assessment.", category:"Pertinent Negative", subCategory:"Patient",     usage:"Required", elementId:"" },
+      { id:"pn_21", label:"Unresponsive",               code:"8801021", exportKey:"unresponsive",        description:"Patient was unresponsive and could not provide information.", category:"Pertinent Negative", subCategory:"Patient", usage:"Required", elementId:"" },
+      { id:"pn_23", label:"Unable to Complete",        code:"8801023", exportKey:"unableToComplete",    description:"Could not be completed due to patient condition or scene.", category:"Pertinent Negative", subCategory:"Operational", usage:"Required", elementId:"" },
+      { id:"pn_25", label:"Not Immunized",             code:"8801025", exportKey:"notImmunized",        description:"Patient has not received this immunization.", category:"Pertinent Negative", subCategory:"Clinical",        usage:"Required", elementId:"" },
+      { id:"pn_27", label:"Order Criteria Not Met",    code:"8801027", exportKey:"orderCriteriaNotMet", description:"Standing order criteria were not met for this intervention.", category:"Pertinent Negative", subCategory:"Administrative", usage:"Required", elementId:"" },
+      { id:"pn_29", label:"Approximate",               code:"8801029", exportKey:"approximate",         description:"Value documented is an approximation, not exact.", category:"Pertinent Negative", subCategory:"Documentation",   usage:"Required", elementId:"" },
+      { id:"pn_31", label:"Symptom Not Present",       code:"8801031", exportKey:"symptomNotPresent",   description:"This symptom was specifically assessed and not found.", category:"Pertinent Negative", subCategory:"Clinical",        usage:"Required", elementId:"" },
+      // ── Nillable Marker ─────────────────────────────────────────────────────
+      { id:"nil_01", label:"Nillable (xsi:nil)", code:"xsi:nil", exportKey:"xsi:nil", description:"Field is nillable — when blank, software auto-submits this marker.", category:"Nillable Marker", subCategory:"System", usage:"System", elementId:"" },
+      // ── Data Elements — eResponse ────────────────────────────────────────────
+      { id:"de_er01", label:"EMS Agency Number",              code:"", exportKey:"eResponse.01", description:"Agency number associated with this EMS event.", category:"Data Element", subCategory:"Response", usage:"Mandatory", elementId:"eResponse.01" },
+      { id:"de_er03", label:"Incident Number",                code:"", exportKey:"eResponse.03", description:"Incident number assigned by 911 CAD system.", category:"Data Element", subCategory:"Response", usage:"Mandatory", elementId:"eResponse.03" },
+      { id:"de_er04", label:"EMS Response Number",            code:"", exportKey:"eResponse.04", description:"Internal EMS response number unique to each unit response.", category:"Data Element", subCategory:"Response", usage:"Mandatory", elementId:"eResponse.04" },
+      { id:"de_er05", label:"Type of Service Requested",      code:"", exportKey:"eResponse.05", description:"Type/category of service requested of the EMS agency.", category:"Data Element", subCategory:"Response", usage:"Mandatory", elementId:"eResponse.05" },
+      { id:"de_er07", label:"Unit Transport Capability",      code:"", exportKey:"eResponse.07", description:"Transport and equipment capabilities of the responding EMS unit.", category:"Data Element", subCategory:"Response", usage:"Required", elementId:"eResponse.07" },
+      { id:"de_er08", label:"Type of Dispatch Delay",         code:"", exportKey:"eResponse.08", description:"Dispatch delays associated with the EMS event.", category:"Data Element", subCategory:"Response", usage:"Recommended", elementId:"eResponse.08" },
+      { id:"de_er23", label:"Response Mode to Scene",         code:"", exportKey:"eResponse.23", description:"Mode of response used traveling to the scene.", category:"Data Element", subCategory:"Response", usage:"Required", elementId:"eResponse.23" },
+      { id:"de_er24", label:"Additional Response Mode",       code:"", exportKey:"eResponse.24", description:"Additional response mode descriptors.", category:"Data Element", subCategory:"Response", usage:"Recommended", elementId:"eResponse.24" },
+      // ── Data Elements — eTimes ───────────────────────────────────────────────
+      { id:"de_et01", label:"PSAP Call Date/Time",            code:"", exportKey:"eTimes.01", description:"Date/time the call was received at the PSAP.", category:"Data Element", subCategory:"Times", usage:"Mandatory", elementId:"eTimes.01" },
+      { id:"de_et05", label:"Unit Notified Date/Time",        code:"", exportKey:"eTimes.05", description:"Date/time EMS unit was notified by dispatch.", category:"Data Element", subCategory:"Times", usage:"Mandatory", elementId:"eTimes.05" },
+      { id:"de_et06", label:"Dispatch Acknowledged Date/Time",code:"", exportKey:"eTimes.06", description:"Date/time unit acknowledged the dispatch.", category:"Data Element", subCategory:"Times", usage:"Mandatory", elementId:"eTimes.06" },
+      { id:"de_et07", label:"Unit En Route Date/Time",        code:"", exportKey:"eTimes.07", description:"Date/time unit began traveling to the scene.", category:"Data Element", subCategory:"Times", usage:"Mandatory", elementId:"eTimes.07" },
+      { id:"de_et09", label:"Unit Arrived at Scene Date/Time",code:"", exportKey:"eTimes.09", description:"Date/time unit arrived at the scene.", category:"Data Element", subCategory:"Times", usage:"Mandatory", elementId:"eTimes.09" },
+      { id:"de_et12", label:"Patient Contact Date/Time",      code:"", exportKey:"eTimes.12", description:"Date/time crew made contact with the patient.", category:"Data Element", subCategory:"Times", usage:"Mandatory", elementId:"eTimes.12" },
+      { id:"de_et13", label:"Unit Left Scene Date/Time",      code:"", exportKey:"eTimes.13", description:"Date/time unit departed from the scene.", category:"Data Element", subCategory:"Times", usage:"Mandatory", elementId:"eTimes.13" },
+      { id:"de_et15", label:"Patient Arrived at Destination", code:"", exportKey:"eTimes.15", description:"Date/time patient arrived at destination.", category:"Data Element", subCategory:"Times", usage:"Mandatory", elementId:"eTimes.15" },
+      // ── Data Elements — eDispatch ────────────────────────────────────────────
+      { id:"de_ed01", label:"Complaint Reported by Dispatch", code:"", exportKey:"eDispatch.01", description:"Chief complaint as reported by 911 dispatch.", category:"Data Element", subCategory:"Dispatch", usage:"Required", elementId:"eDispatch.01" },
+      { id:"de_ed05", label:"EMD Performed",                  code:"", exportKey:"eDispatch.05", description:"Whether Emergency Medical Dispatch was performed.", category:"Data Element", subCategory:"Dispatch", usage:"Required", elementId:"eDispatch.05" },
+      { id:"de_ed06", label:"EMD Card Number",                code:"", exportKey:"eDispatch.06", description:"EMD protocol card number used.", category:"Data Element", subCategory:"Dispatch", usage:"Recommended", elementId:"eDispatch.06" },
+      // ── Data Elements — eScene ───────────────────────────────────────────────
+      { id:"de_esc01", label:"First EMS Unit on Scene",       code:"", exportKey:"eScene.01", description:"Whether this was the first EMS unit on scene.", category:"Data Element", subCategory:"Scene", usage:"Mandatory", elementId:"eScene.01" },
+      { id:"de_esc06", label:"Number of Patients at Scene",   code:"", exportKey:"eScene.06", description:"Total number of patients at the scene.", category:"Data Element", subCategory:"Scene", usage:"Required", elementId:"eScene.06" },
+      { id:"de_esc07", label:"Mass Casualty Incident",        code:"", exportKey:"eScene.07", description:"Whether the event is a mass casualty incident.", category:"Data Element", subCategory:"Scene", usage:"Required", elementId:"eScene.07" },
+      { id:"de_esc08", label:"Triage Classification",         code:"", exportKey:"eScene.08", description:"START/JumpSTART triage classification for MCI patient.", category:"Data Element", subCategory:"Scene", usage:"Recommended", elementId:"eScene.08" },
+      { id:"de_esc09", label:"Incident Location Type",        code:"", exportKey:"eScene.09", description:"Type of location where the incident occurred.", category:"Data Element", subCategory:"Scene", usage:"Optional", elementId:"eScene.09" },
+      // ── Data Elements — ePatient ─────────────────────────────────────────────
+      { id:"de_ep03", label:"Patient Last Name",              code:"", exportKey:"ePatient.03", description:"Patient's last (family) name.", category:"Data Element", subCategory:"Patient", usage:"Required", elementId:"ePatient.03" },
+      { id:"de_ep04", label:"Patient First Name",             code:"", exportKey:"ePatient.04", description:"Patient's first (given) name.", category:"Data Element", subCategory:"Patient", usage:"Required", elementId:"ePatient.04" },
+      { id:"de_ep06", label:"Patient Date of Birth",          code:"", exportKey:"ePatient.06", description:"Patient's date of birth.", category:"Data Element", subCategory:"Patient", usage:"Required", elementId:"ePatient.06" },
+      { id:"de_ep13", label:"Patient Gender",                 code:"", exportKey:"ePatient.13", description:"Patient's gender identity.", category:"Data Element", subCategory:"Patient", usage:"Required", elementId:"ePatient.13" },
+      { id:"de_ep14", label:"Patient Race",                   code:"", exportKey:"ePatient.14", description:"Patient's race as reported by patient or observed.", category:"Data Element", subCategory:"Patient", usage:"Required", elementId:"ePatient.14" },
+      { id:"de_ep15", label:"Patient Age",                    code:"", exportKey:"ePatient.15", description:"Patient age — calculated from DOB or best approximation.", category:"Data Element", subCategory:"Patient", usage:"Required", elementId:"ePatient.15" },
+      { id:"de_ep16", label:"Patient Age Units",              code:"", exportKey:"ePatient.16", description:"Units used for patient age (years, months, days).", category:"Data Element", subCategory:"Patient", usage:"Required", elementId:"ePatient.16" },
+      // ── Data Elements — eSituation ───────────────────────────────────────────
+      { id:"de_es01", label:"Date/Time Symptom Onset",        code:"", exportKey:"eSituation.01", description:"Date/time patient's symptoms began.", category:"Data Element", subCategory:"Situation", usage:"Required", elementId:"eSituation.01" },
+      { id:"de_es02", label:"Possible Injury",                code:"", exportKey:"eSituation.02", description:"Whether an injury is suspected.", category:"Data Element", subCategory:"Situation", usage:"Required", elementId:"eSituation.02" },
+      { id:"de_es07", label:"Chief Complaint (Anatomy)",      code:"", exportKey:"eSituation.07", description:"Anatomical location of the chief complaint.", category:"Data Element", subCategory:"Situation", usage:"Required", elementId:"eSituation.07" },
+      { id:"de_es08", label:"Chief Complaint Duration",       code:"", exportKey:"eSituation.08", description:"Duration of the chief complaint.", category:"Data Element", subCategory:"Situation", usage:"Recommended", elementId:"eSituation.08" },
+      { id:"de_es09", label:"Primary Symptom",                code:"", exportKey:"eSituation.09", description:"Patient's primary symptom at time of EMS contact.", category:"Data Element", subCategory:"Situation", usage:"Required", elementId:"eSituation.09" },
+      { id:"de_es10", label:"Other Associated Symptoms",      code:"", exportKey:"eSituation.10", description:"Other symptoms associated with the primary complaint.", category:"Data Element", subCategory:"Situation", usage:"Recommended", elementId:"eSituation.10" },
+      { id:"de_es11", label:"Provider's Primary Impression",  code:"", exportKey:"eSituation.11", description:"EMS provider's primary clinical impression/field diagnosis.", category:"Data Element", subCategory:"Situation", usage:"Required", elementId:"eSituation.11" },
+      { id:"de_es12", label:"Provider's Secondary Impression",code:"", exportKey:"eSituation.12", description:"EMS provider's secondary clinical impression.", category:"Data Element", subCategory:"Situation", usage:"Recommended", elementId:"eSituation.12" },
+      // ── Data Elements — eVitals ──────────────────────────────────────────────
+      { id:"de_ev01", label:"Vitals Date/Time",               code:"", exportKey:"eVitals.01", description:"Date/time the vital signs were obtained.", category:"Data Element", subCategory:"Vitals", usage:"Mandatory", elementId:"eVitals.01" },
+      { id:"de_ev03", label:"Cardiac Rhythm / ECG",           code:"", exportKey:"eVitals.03", description:"Cardiac rhythm interpretation from ECG.", category:"Data Element", subCategory:"Vitals", usage:"Required", elementId:"eVitals.03" },
+      { id:"de_ev05", label:"Method of BP Measurement",       code:"", exportKey:"eVitals.05", description:"Method used to obtain blood pressure.", category:"Data Element", subCategory:"Vitals", usage:"Recommended", elementId:"eVitals.05" },
+      { id:"de_ev06", label:"Systolic Blood Pressure",        code:"", exportKey:"eVitals.06", description:"Systolic blood pressure reading in mmHg.", category:"Data Element", subCategory:"Vitals", usage:"Required", elementId:"eVitals.06" },
+      { id:"de_ev07", label:"Diastolic Blood Pressure",       code:"", exportKey:"eVitals.07", description:"Diastolic blood pressure reading in mmHg.", category:"Data Element", subCategory:"Vitals", usage:"Recommended", elementId:"eVitals.07" },
+      { id:"de_ev08", label:"Method of Pulse Measurement",    code:"", exportKey:"eVitals.08", description:"Method used to obtain pulse rate.", category:"Data Element", subCategory:"Vitals", usage:"Recommended", elementId:"eVitals.08" },
+      { id:"de_ev09", label:"Pulse Rate",                     code:"", exportKey:"eVitals.09", description:"Patient pulse rate in beats per minute.", category:"Data Element", subCategory:"Vitals", usage:"Required", elementId:"eVitals.09" },
+      { id:"de_ev12", label:"Pulse Oximetry",                 code:"", exportKey:"eVitals.12", description:"Peripheral oxygen saturation (SpO2) percentage.", category:"Data Element", subCategory:"Vitals", usage:"Required", elementId:"eVitals.12" },
+      { id:"de_ev14", label:"Respiratory Rate",               code:"", exportKey:"eVitals.14", description:"Patient respiratory rate in breaths per minute.", category:"Data Element", subCategory:"Vitals", usage:"Required", elementId:"eVitals.14" },
+      { id:"de_ev16", label:"End Tidal CO2",                  code:"", exportKey:"eVitals.16", description:"End-tidal CO2 measurement.", category:"Data Element", subCategory:"Vitals", usage:"Recommended", elementId:"eVitals.16" },
+      { id:"de_ev18", label:"GCS Eye",                        code:"", exportKey:"eVitals.18", description:"Glasgow Coma Scale — Eye opening score.", category:"Data Element", subCategory:"Vitals", usage:"Required", elementId:"eVitals.18" },
+      { id:"de_ev19", label:"GCS Verbal",                     code:"", exportKey:"eVitals.19", description:"Glasgow Coma Scale — Verbal response score.", category:"Data Element", subCategory:"Vitals", usage:"Required", elementId:"eVitals.19" },
+      { id:"de_ev20", label:"GCS Motor",                      code:"", exportKey:"eVitals.20", description:"Glasgow Coma Scale — Motor response score.", category:"Data Element", subCategory:"Vitals", usage:"Required", elementId:"eVitals.20" },
+      { id:"de_ev23", label:"GCS Total",                      code:"", exportKey:"eVitals.23", description:"Glasgow Coma Scale total score (3–15).", category:"Data Element", subCategory:"Vitals", usage:"Required", elementId:"eVitals.23" },
+      { id:"de_ev24", label:"Temperature",                    code:"", exportKey:"eVitals.24", description:"Patient body temperature.", category:"Data Element", subCategory:"Vitals", usage:"Recommended", elementId:"eVitals.24" },
+      { id:"de_ev25", label:"Pain Scale Score",               code:"", exportKey:"eVitals.25", description:"Patient's self-reported pain score (0–10).", category:"Data Element", subCategory:"Vitals", usage:"Required", elementId:"eVitals.25" },
+      { id:"de_ev26", label:"Stroke Scale Type",              code:"", exportKey:"eVitals.26", description:"Type of stroke scale used for assessment.", category:"Data Element", subCategory:"Vitals", usage:"Recommended", elementId:"eVitals.26" },
+      { id:"de_ev29", label:"Stroke Scale Score",             code:"", exportKey:"eVitals.29", description:"Results of the stroke scale assessment.", category:"Data Element", subCategory:"Vitals", usage:"Recommended", elementId:"eVitals.29" },
+      // ── Data Elements — eHistory ─────────────────────────────────────────────
+      { id:"de_eh01", label:"Barriers to Patient Care",       code:"", exportKey:"eHistory.01", description:"Barriers that affected patient care or assessment.", category:"Data Element", subCategory:"History", usage:"Required", elementId:"eHistory.01" },
+      { id:"de_eh07", label:"Alcohol/Drug Use Indicators",    code:"", exportKey:"eHistory.07", description:"Indicators of alcohol or drug use.", category:"Data Element", subCategory:"History", usage:"Recommended", elementId:"eHistory.07" },
+      { id:"de_eh08", label:"Immunization Status",            code:"", exportKey:"eHistory.08", description:"Patient's immunization status.", category:"Data Element", subCategory:"History", usage:"Recommended", elementId:"eHistory.08" },
+      // ── Data Elements — eProcedures ──────────────────────────────────────────
+      { id:"de_epr01", label:"Procedure Date/Time",           code:"", exportKey:"eProcedures.01", description:"Date/time the procedure was performed.", category:"Data Element", subCategory:"Procedures", usage:"Required", elementId:"eProcedures.01" },
+      { id:"de_epr02", label:"Performed Prior to EMS",        code:"", exportKey:"eProcedures.02", description:"Whether procedure was performed before EMS arrival.", category:"Data Element", subCategory:"Procedures", usage:"Required", elementId:"eProcedures.02" },
+      { id:"de_epr03", label:"Procedure",                     code:"", exportKey:"eProcedures.03", description:"The specific procedure performed.", category:"Data Element", subCategory:"Procedures", usage:"Required", elementId:"eProcedures.03" },
+      { id:"de_epr05", label:"Number of Procedure Attempts",  code:"", exportKey:"eProcedures.05", description:"Number of attempts to perform the procedure.", category:"Data Element", subCategory:"Procedures", usage:"Required", elementId:"eProcedures.05" },
+      { id:"de_epr06", label:"Procedure Successful",          code:"", exportKey:"eProcedures.06", description:"Whether the procedure was successfully completed.", category:"Data Element", subCategory:"Procedures", usage:"Required", elementId:"eProcedures.06" },
+      { id:"de_epr07", label:"Procedure Performed By",        code:"", exportKey:"eProcedures.07", description:"Crew member who performed the procedure.", category:"Data Element", subCategory:"Procedures", usage:"Required", elementId:"eProcedures.07" },
+      { id:"de_epr08", label:"Response to Procedure",         code:"", exportKey:"eProcedures.08", description:"Patient's clinical response to the procedure.", category:"Data Element", subCategory:"Procedures", usage:"Required", elementId:"eProcedures.08" },
+      // ── Data Elements — eMedications ─────────────────────────────────────────
+      { id:"de_em01", label:"Medication Date/Time",           code:"", exportKey:"eMedications.01", description:"Date/time medication was administered.", category:"Data Element", subCategory:"Medications", usage:"Required", elementId:"eMedications.01" },
+      { id:"de_em03", label:"Medication Given Prior",         code:"", exportKey:"eMedications.03", description:"Whether medication was given prior to EMS.", category:"Data Element", subCategory:"Medications", usage:"Required", elementId:"eMedications.03" },
+      { id:"de_em04", label:"Medication",                     code:"", exportKey:"eMedications.04", description:"The medication administered.", category:"Data Element", subCategory:"Medications", usage:"Required", elementId:"eMedications.04" },
+      { id:"de_em06", label:"Medication Dosage",              code:"", exportKey:"eMedications.06", description:"Amount/dose of medication administered.", category:"Data Element", subCategory:"Medications", usage:"Required", elementId:"eMedications.06" },
+      { id:"de_em07", label:"Medication Dosage Units",        code:"", exportKey:"eMedications.07", description:"Units of the medication dosage.", category:"Data Element", subCategory:"Medications", usage:"Required", elementId:"eMedications.07" },
+      { id:"de_em08", label:"Medication Route",               code:"", exportKey:"eMedications.08", description:"Route of medication administration.", category:"Data Element", subCategory:"Medications", usage:"Required", elementId:"eMedications.08" },
+      { id:"de_em10", label:"Response to Medication",         code:"", exportKey:"eMedications.10", description:"Patient's clinical response to the medication.", category:"Data Element", subCategory:"Medications", usage:"Required", elementId:"eMedications.10" },
+      // ── Data Elements — eArrest ──────────────────────────────────────────────
+      { id:"de_ea01", label:"Cardiac Arrest",                 code:"", exportKey:"eArrest.01", description:"Whether cardiac arrest occurred.", category:"Data Element", subCategory:"Arrest", usage:"Mandatory", elementId:"eArrest.01" },
+      { id:"de_ea02", label:"Cardiac Arrest Etiology",        code:"", exportKey:"eArrest.02", description:"Etiology/cause of cardiac arrest.", category:"Data Element", subCategory:"Arrest", usage:"Required", elementId:"eArrest.02" },
+      { id:"de_ea03", label:"Resuscitation Attempted",        code:"", exportKey:"eArrest.03", description:"Whether resuscitation was attempted by EMS.", category:"Data Element", subCategory:"Arrest", usage:"Required", elementId:"eArrest.03" },
+      { id:"de_ea04", label:"Arrest Witnessed By",            code:"", exportKey:"eArrest.04", description:"Who witnessed the cardiac arrest.", category:"Data Element", subCategory:"Arrest", usage:"Required", elementId:"eArrest.04" },
+      { id:"de_ea11", label:"First Monitored Rhythm",         code:"", exportKey:"eArrest.11", description:"First cardiac rhythm documented by EMS.", category:"Data Element", subCategory:"Arrest", usage:"Required", elementId:"eArrest.11" },
+      { id:"de_ea14", label:"Date/Time of ROSC",              code:"", exportKey:"eArrest.14", description:"Date/time of return of spontaneous circulation.", category:"Data Element", subCategory:"Arrest", usage:"Required", elementId:"eArrest.14" },
+      // ── Data Elements — eDisposition ─────────────────────────────────────────
+      { id:"de_edi19", label:"Unit Disposition",              code:"", exportKey:"eDisposition.19", description:"Disposition of the EMS unit for this event.", category:"Data Element", subCategory:"Disposition", usage:"Mandatory", elementId:"eDisposition.19" },
+      { id:"de_edi20", label:"Patient Evaluated/Care",        code:"", exportKey:"eDisposition.20", description:"Whether patient was evaluated and care provided.", category:"Data Element", subCategory:"Disposition", usage:"Mandatory", elementId:"eDisposition.20" },
+      { id:"de_edi21", label:"Crew Disposition",              code:"", exportKey:"eDisposition.21", description:"Crew's role in patient care for this event.", category:"Data Element", subCategory:"Disposition", usage:"Mandatory", elementId:"eDisposition.21" },
+      { id:"de_edi22", label:"Transport Disposition",         code:"", exportKey:"eDisposition.22", description:"Whether and how patient was transported.", category:"Data Element", subCategory:"Disposition", usage:"Mandatory", elementId:"eDisposition.22" },
+      { id:"de_edi30", label:"Destination/Transferred To",    code:"", exportKey:"eDisposition.30", description:"Facility to which patient was transported.", category:"Data Element", subCategory:"Disposition", usage:"Required", elementId:"eDisposition.30" },
+      // ── Data Elements — eOutcome ─────────────────────────────────────────────
+      { id:"de_eo01", label:"ER Disposition",                 code:"", exportKey:"eOutcome.01", description:"Patient's disposition from the emergency department.", category:"Data Element", subCategory:"Outcome", usage:"Recommended", elementId:"eOutcome.01" },
+      { id:"de_eo02", label:"Hospital Disposition",           code:"", exportKey:"eOutcome.02", description:"Patient's disposition from the hospital.", category:"Data Element", subCategory:"Outcome", usage:"Recommended", elementId:"eOutcome.02" },
+      { id:"de_eo09", label:"ER Procedures",                  code:"", exportKey:"eOutcome.09", description:"Procedures performed in the emergency department.", category:"Data Element", subCategory:"Outcome", usage:"Recommended", elementId:"eOutcome.09" },
+    ]
+  },
+  {
+    id: "lib_custom",
+    name: "Custom Library",
+    icon: "⚙",
+    description: "Your own custom data elements — add rows to match your organization's needs",
+    color: "#258750",
+    version: "1.0",
+    source: "custom",
+    mondayBoardId: null,
+    columns: [...SYSTEM_COLUMNS],
+    categories: ["Custom"],
+    subCategories: ["General"],
+    permissions: { canView:["admin","editor","viewer"], canEdit:["admin","editor"], canDelete:["admin"] },
+    rows: [
+      { id:"cu_01", label:"Custom Field", code:"", exportKey:"custom_field_1", description:"Replace with your own data element.", category:"Custom", subCategory:"General", usage:"Optional", elementId:"" },
+    ]
+  },
+];
+
+// Helper: get all rows from all libraries matching a category
+const getLibraryRowsByCategory = (libraries, category) =>
+  libraries.flatMap(lib => (lib.rows||[]).filter(r => r.category === category));
+
+// Helper: get a specific row by libraryId + rowId
+const getLibraryRow = (libraries, libraryId, rowId) => {
+  const lib = libraries.find(l => l.id === libraryId);
+  return lib?.rows?.find(r => r.id === rowId) || null;
+};
+
+
+// ─── Field / Row / Section / Page factories ────────────────────────────────
+const makeField = type => ({
+  id:uid(), type,
+  label: FIELD_TYPES.find(f=>f.type===type)?.label || "Field",
+  required: false,
+  placeholder: "",
+  helpText: "",
+  validation: {},
+  // All export key mappings go through the library system
+  libraryRows: [], // [{libraryId, rowId, label, exportKey, code, category, subCategory}]
+  // Field behaviour
+  behaviour: {
+    defaultValue:"", memoryField:false, geoLocation:false, hideQuestion:false,
+    enabled:true, hintText:"", excludeReport:false, timeStamp:false, hidden:false, color:"",
+  },
+  // Which library categories surface as chips to respondent
+  dataAttrs: { showCategories:[], isNillable:false },
+  // Narrative
+  narrative: { valueText:"", notValueText:"" },
+  options: ["dropdown","multi_select","radio"].includes(type)
+    ? [{id:uid(),label:"Option 1"},{id:uid(),label:"Option 2"}]
+    : type==="checkbox"
+    ? [{id:uid(),label:"Check this box"}]
+    : undefined,
+  settings: Object.assign({},
+    type==="rating"    && {max:5},
+    type==="scale"     && {min:1,max:10,minLabel:"Low",maxLabel:"High"},
+    type==="number"    && {min:"",max:"",prefix:"",suffix:""},
+    type==="file"      && {maxSize:10,accept:"*",multiple:false},
+    type==="text"      && {maxLength:""},
+    type==="long_text" && {maxLength:"",rows:4},
+    type==="description" && {content:"Add description text here..."},
+  ),
+});
+
+const makeCell    = ()  => ({id:uid(), fields:[]});
+const makeRow     = (p) => ({id:uid(), preset:p||COL_PRESETS[0], cells:(p||COL_PRESETS[0]).cols.map(()=>makeCell())});
+const makeSection = n   => ({id:uid(), title:`Section ${n}`, settings:{repeatable:false,repeatLabel:"+ Add Another",maxRepeats:10}, rows:[makeRow()]});
+const makePage    = n   => ({id:uid(), title:`Page ${n}`,    description:"", sections:[makeSection(1)]});
+const INIT = {
+  id:uid(), name:"Untitled Form", description:"",
+  pages: [makePage(1)],
+  libraries: [...DEFAULT_LIBRARIES],
+  narrativeTemplates: [],
+  settings: {
+    submitLabel:"Submit",
+    successMessage:"Thank you! Your response has been submitted.",
+    redirectUrl:"", showProgress:true, allowDraft:false, formLayout:"progress",
+  }
+};
+
+// ─── UI Atoms ─────────────────────────────────────────────────────────────────
+const inp={width:"100%",padding:"7px 10px",fontSize:V.md,border:`1px solid ${V.border}`,borderRadius:V.r2,background:V.bgSurface,color:V.textPrimary,outline:"none",fontFamily:V.font,boxSizing:"border-box",transition:"border-color .15s,box-shadow .15s"};
+function VInput({style:s,...p}){return <input {...p} style={{...inp,...s}} onFocus={e=>{e.target.style.borderColor=V.borderFocus;e.target.style.boxShadow=`0 0 0 3px ${V.primaryLight}`;p.onFocus?.(e);}} onBlur={e=>{e.target.style.borderColor=V.border;e.target.style.boxShadow="none";p.onBlur?.(e);}}/> }
+function VTA(p){return <textarea {...p} style={{...inp,resize:"vertical",...p.style}} onFocus={e=>{e.target.style.borderColor=V.borderFocus;e.target.style.boxShadow=`0 0 0 3px ${V.primaryLight}`;}} onBlur={e=>{e.target.style.borderColor=V.border;e.target.style.boxShadow="none";}}/>;}
+function VBtn({variant="primary",size="md",style:s,...p}){
+  const SZ={sm:{padding:"4px 12px",fontSize:V.sm},md:{padding:"7px 16px",fontSize:V.md},lg:{padding:"9px 22px",fontSize:V.lg}};
+  const BG={primary:{bg:V.primary,hov:V.primaryHover,col:"#fff",border:"none"},secondary:{bg:"#fff",hov:V.bgHover,col:V.textPrimary,border:`1px solid ${V.border}`},ghost:{bg:"transparent",hov:V.bgHighlight,col:V.primary,border:`1px solid ${V.primary}`},danger:{bg:V.negative,hov:"#b52d42",col:"#fff",border:"none"},subtle:{bg:V.bgHover,hov:V.bgSelected,col:V.textPrimary,border:"none"},warning:{bg:V.warningBg,hov:"#f5d9a8",col:V.warning,border:`1px solid ${V.warning}44`}};
+  const b=BG[variant]||BG.primary;
+  return <button {...p} style={{...SZ[size],background:b.bg,color:b.col,border:b.border,borderRadius:V.r2,cursor:"pointer",fontFamily:V.font,fontWeight:600,lineHeight:1.4,transition:"all .15s",display:"inline-flex",alignItems:"center",gap:4,...s}} onMouseEnter={e=>e.currentTarget.style.background=b.hov} onMouseLeave={e=>e.currentTarget.style.background=b.bg}/>;
+}
+function VLabel({children,required}){return <label style={{display:"block",fontSize:V.xs,fontWeight:700,color:V.textSecondary,marginBottom:V.s1,fontFamily:V.font,letterSpacing:"0.06em",textTransform:"uppercase"}}>{children}{required&&<span style={{color:V.negative,marginLeft:2}}>*</span>}</label>;}
+function VRow({label,children,hint}){return <div style={{marginBottom:V.s4}}>{label&&<VLabel>{label}</VLabel>}{children}{hint&&<div style={{fontSize:V.xs,color:V.textDisabled,marginTop:V.s1,fontFamily:V.font}}>{hint}</div>}</div>;}
+function VToggle({checked,onChange,label}){return <label style={{display:"flex",alignItems:"center",gap:V.s2,cursor:"pointer",fontFamily:V.font,fontSize:V.md,color:V.textPrimary,userSelect:"none"}}><div onClick={()=>onChange(!checked)} style={{width:36,height:20,borderRadius:V.rFull,background:checked?V.primary:V.border,position:"relative",cursor:"pointer",transition:"background .2s",flexShrink:0}}><div style={{width:16,height:16,borderRadius:"50%",background:"#fff",position:"absolute",top:2,left:checked?18:2,transition:"left .2s",boxShadow:V.shadow1}}/></div><span>{label}</span></label>;}
+function VDivider(){return <div style={{borderTop:`1px solid ${V.borderLight}`,margin:`${V.s4} 0`}}/>;}
+function VSecTitle({children}){return <div style={{fontSize:V.xs,fontWeight:700,color:V.textDisabled,textTransform:"uppercase",letterSpacing:".1em",marginBottom:V.s3,fontFamily:V.font}}>{children}</div>;}
+
+
+// ─── Live FieldPreview ────────────────────────────────────────────────────────
+function FieldPreview({field,compact}){
+  const base={...inp,fontSize:V.sm,padding:compact?"4px 8px":"6px 10px",background:V.bgApp,cursor:"not-allowed"};
+  if(field.type==="description")return <div style={{fontSize:V.sm,color:V.textSecondary,fontStyle:"italic",background:V.bgApp,borderRadius:V.r2,padding:"8px 10px",border:`1px solid ${V.borderLight}`,fontFamily:V.font}}>{field.settings.content||"Description…"}</div>;
+  if(field.type==="divider")return <div style={{borderTop:`1.5px dashed ${V.border}`,margin:"6px 0"}}/>;
+  if(field.type==="long_text")return <textarea disabled placeholder={field.placeholder||"Type here…"} rows={compact?2:field.settings.rows||4} style={{...base,resize:"none",width:"100%"}}/>;
+  if(field.type==="dropdown")return <div style={{position:"relative"}}><select disabled style={{...base,width:"100%",paddingRight:28,appearance:"none"}}><option>{field.placeholder||"Choose an option…"}</option>{field.options?.map(o=><option key={o.id}>{o.label}</option>)}</select><span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",color:V.textDisabled,pointerEvents:"none",fontSize:10}}>▾</span></div>;
+  if(field.type==="radio")return <div style={{display:"flex",flexDirection:"column",gap:6}}>{(field.options||[]).map(o=><label key={o.id} style={{display:"flex",alignItems:"center",gap:8,fontSize:V.sm,color:V.textPrimary,fontFamily:V.font}}><div style={{width:15,height:15,borderRadius:"50%",border:`2px solid ${V.border}`,flexShrink:0,background:"#fff"}}/>{o.label}</label>)}</div>;
+  if(field.type==="checkbox")return <label style={{display:"flex",alignItems:"center",gap:8,fontSize:V.sm,color:V.textPrimary,fontFamily:V.font}}><div style={{width:15,height:15,borderRadius:3,border:`2px solid ${V.border}`,flexShrink:0,background:"#fff"}}/>{field.options?.[0]?.label||field.label||"Check this box"}</label>;
+  if(field.type==="multi_select")return <div style={{display:"flex",flexWrap:"wrap",gap:5,padding:"6px 10px",border:`1px solid ${V.border}`,borderRadius:V.r2,background:V.bgApp,minHeight:36}}>{(field.options||[]).slice(0,compact?2:5).map(o=><span key={o.id} style={{padding:"2px 10px",borderRadius:V.rFull,background:V.bgSurface,border:`1px solid ${V.border}`,fontSize:V.xs,color:V.textPrimary,fontFamily:V.font}}>{o.label}</span>)}</div>;
+  if(field.type==="rating")return <div style={{display:"flex",gap:3}}>{Array.from({length:field.settings.max||5}).map((_,i)=><span key={i} style={{fontSize:compact?15:20,color:i<Math.ceil((field.settings.max||5)/2)?"#FFBB00":V.borderLight}}>★</span>)}</div>;
+  if(field.type==="scale")return <div><input type="range" min={field.settings.min} max={field.settings.max} disabled style={{width:"100%",accentColor:V.primary,height:4}}/><div style={{display:"flex",justifyContent:"space-between",fontSize:V.xs,color:V.textSecondary,fontFamily:V.font,marginTop:2}}><span>{field.settings.minLabel||String(field.settings.min)}</span><span>{field.settings.maxLabel||String(field.settings.max)}</span></div></div>;
+  if(field.type==="date")return <input type="date" disabled style={{...base}}/>;
+  if(field.type==="time")return <input type="time" disabled style={{...base}}/>;
+  if(field.type==="file")return <div style={{border:`1.5px dashed ${V.border}`,borderRadius:V.r2,padding:compact?"10px":"16px",textAlign:"center",background:V.bgApp,fontFamily:V.font}}><div style={{fontSize:compact?16:22,color:V.textDisabled,marginBottom:4}}>↑</div><div style={{fontSize:V.sm,color:V.textSecondary,fontWeight:500}}>{field.settings.multiple?"Upload files":"Upload a file"}</div><div style={{fontSize:V.xs,color:V.textDisabled,marginTop:2}}>Max {field.settings.maxSize}MB</div></div>;
+  if(field.type==="signature")return <div style={{border:`1px solid ${V.border}`,borderRadius:V.r2,height:compact?44:60,background:"#FAFBFF",display:"flex",alignItems:"center",justifyContent:"center",color:V.textDisabled,fontSize:V.sm,fontFamily:V.font,gap:6}}><span style={{fontSize:18}}>✍</span>Sign here</div>;
+  if(field.settings?.prefix||field.settings?.suffix)return <div style={{display:"flex",border:`1px solid ${V.border}`,borderRadius:V.r2,overflow:"hidden",background:V.bgApp}}>{field.settings.prefix&&<span style={{padding:"6px 10px",background:V.bgHover,borderRight:`1px solid ${V.border}`,fontSize:V.sm,color:V.textSecondary,fontFamily:V.font,whiteSpace:"nowrap"}}>{field.settings.prefix}</span>}<input disabled placeholder={field.placeholder||"Enter value…"} type="number" style={{...base,border:"none",flex:1,borderRadius:0}}/>{field.settings.suffix&&<span style={{padding:"6px 10px",background:V.bgHover,borderLeft:`1px solid ${V.border}`,fontSize:V.sm,color:V.textSecondary,fontFamily:V.font,whiteSpace:"nowrap"}}>{field.settings.suffix}</span>}</div>;
+  const t=field.type==="email"?"email":field.type==="phone"?"tel":field.type==="url"?"url":field.type==="number"?"number":"text";
+  return <input type={t} disabled placeholder={field.placeholder||"Type here…"} style={{...base}}/>;
+}
+
+// ─── OptionsEditor ────────────────────────────────────────────────────────────
+function OptionsEditor({ options, onChange, fieldType }) {
+  const [expandedId, setExpandedId] = useState(null);
+  const isSingleOpt = fieldType === "checkbox";
+
+  const updOpt = (i, patch) => {
+    const n = options.slice();
+    n[i] = { ...n[i], ...patch };
+    onChange(n);
+  };
+
+  return (
+    <div>
+      {options.map((opt, i) => {
+        const isExpanded = expandedId === opt.id;
+        const hasKeys = false;
+        const totalKeys = 0;
+
+        return (
+          <div key={opt.id} style={{
+            marginBottom: V.s2, border: `1px solid ${isExpanded ? V.primary : V.borderLight}`,
+            borderRadius: V.r3, background: isExpanded ? V.primaryBg : V.bgSurface,
+            transition: "all .15s", overflow: "hidden",
+          }}>
+            {/* Option row */}
+            <div style={{ display: "flex", alignItems: "center", gap: V.s2, padding: `${V.s2} ${V.s2}` }}>
+              {/* Drag handle */}
+              {!isSingleOpt && (
+                <span style={{ color: V.textDisabled, fontSize: 11, cursor: "grab", flexShrink: 0, padding: "0 2px" }}>⠿</span>
+              )}
+
+              {/* Label input */}
+              <VInput
+                value={opt.label}
+                onChange={e => updOpt(i, { label: e.target.value })}
+                style={{ flex: 1 }}
+                placeholder={`Option ${i + 1}`}
+              />
+
+              {/* Key count badge */}
+              {hasKeys && (
+                <span title={`${totalKeys} key${totalKeys !== 1 ? "s" : ""} assigned`} style={{
+                  fontSize: 9, padding: "2px 6px", borderRadius: V.rFull,
+                  background: isExpanded ? V.primary : V.primaryLight,
+                  color: isExpanded ? "#fff" : V.primary,
+                  fontWeight: 700, fontFamily: V.font, flexShrink: 0, cursor: "pointer",
+                }} onClick={() => setExpandedId(isExpanded ? null : opt.id)}>
+                  {totalKeys}k
+                </span>
+              )}
+
+              {/* Expand / keys button */}
+              <button
+                onClick={() => setExpandedId(isExpanded ? null : opt.id)}
+                title={isExpanded ? "Hide key mapping" : "Assign export keys to this option"}
+                style={{
+                  background: isExpanded ? V.primary : "none",
+                  border: `1px solid ${isExpanded ? V.primary : V.borderLight}`,
+                  borderRadius: V.r2, cursor: "pointer",
+                  color: isExpanded ? "#fff" : V.textDisabled,
+                  fontSize: 10, padding: "2px 6px",
+                  display: "flex", alignItems: "center", gap: 3,
+                  flexShrink: 0, fontFamily: V.font, fontWeight: 600,
+                  transition: "all .12s",
+                }}
+                onMouseEnter={e => { if (!isExpanded) { e.currentTarget.style.background = V.primaryLight; e.currentTarget.style.borderColor = V.primary; e.currentTarget.style.color = V.primary; } }}
+                onMouseLeave={e => { if (!isExpanded) { e.currentTarget.style.background = "none"; e.currentTarget.style.borderColor = V.borderLight; e.currentTarget.style.color = V.textDisabled; } }}
+              >
+                🔗 {isExpanded ? "▲" : "▼"}
+              </button>
+
+              {/* Delete button — not for checkbox single option */}
+              {!isSingleOpt && options.length > 1 && (
+                <button
+                  onClick={() => { onChange(options.filter((_, j) => j !== i)); if (expandedId === opt.id) setExpandedId(null); }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: V.textDisabled, fontSize: 16, padding: "0 2px", lineHeight: 1, flexShrink: 0 }}
+                  onMouseEnter={e => e.target.style.color = V.negative}
+                  onMouseLeave={e => e.target.style.color = V.textDisabled}
+                >×</button>
+              )}
+            </div>
+
+            {/* Expanded key mapping panel */}
+            {isExpanded && (
+              <div style={{
+                borderTop: `1px solid ${V.primary}33`,
+                padding: `${V.s3} ${V.s3} ${V.s3}`,
+                background: V.bgSurface,
+              }}>
+                <div style={{
+                  fontSize: V.xs, fontWeight: 700, color: V.primary,
+                  textTransform: "uppercase", letterSpacing: ".06em",
+                  marginBottom: V.s2, fontFamily: V.font,
+                  display: "flex", alignItems: "center", gap: V.s2,
+                }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: V.primary, display: "inline-block" }}/>
+                  Export Keys for "{opt.label||`Option ${i+1}`}"
+                </div>
+                <div style={{ fontSize: V.xs, color: V.textSecondary, marginBottom: V.s2, lineHeight: 1.4, fontFamily: V.font }}>
+                  These keys are exported when this option is selected. Use board keys to map directly to a monday.com column value.
+                </div>
+
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* Add option — not for checkbox */}
+      {!isSingleOpt && (
+        <VBtn
+          variant="ghost" size="sm"
+          onClick={() => onChange([...options, { id: uid(), label: `Option ${options.length + 1}` }])}
+          style={{ width: "100%", justifyContent: "center", border: `1px dashed ${V.border}`, color: V.textSecondary }}
+        >+ Add option</VBtn>
+      )}
+    </div>
+  );
+}
+
+
+// ─── Section Settings Drawer ──────────────────────────────────────────────────
+function SectionSettingsDrawer({section,onClose,onChange}){
+  const s=section.settings||{};
+  const updS=p=>onChange({...section,settings:{...s,...p}});
+  return <div style={{position:"fixed",inset:0,background:"rgba(28,31,59,0.45)",display:"flex",alignItems:"flex-start",justifyContent:"flex-end",zIndex:3500,backdropFilter:"blur(1px)"}} onClick={onClose}>
+    <div onClick={e=>e.stopPropagation()} style={{width:360,height:"100vh",background:V.bgSurface,borderLeft:`1px solid ${V.borderLight}`,display:"flex",flexDirection:"column",boxShadow:V.shadow3,overflow:"hidden",fontFamily:V.font}}>
+      <div style={{padding:`${V.s4} ${V.s4}`,borderBottom:`1px solid ${V.borderLight}`,display:"flex",alignItems:"center",gap:V.s3,background:V.bgApp,flexShrink:0}}>
+        <div style={{width:32,height:32,borderRadius:V.r3,background:CAT.layout.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>⚙</div>
+        <div style={{flex:1}}><div style={{fontWeight:700,fontSize:V.md,color:V.textPrimary}}>Section Settings</div><div style={{fontSize:V.xs,color:V.textSecondary,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{section.title}</div></div>
+        <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:V.textDisabled,fontSize:20,lineHeight:1}} onMouseEnter={e=>e.target.style.color=V.negative} onMouseLeave={e=>e.target.style.color=V.textDisabled}>×</button>
+      </div>
+      <div style={{overflowY:"auto",flex:1,padding:V.s4}}>
+        <VSecTitle>Section Name</VSecTitle>
+        <VRow><VInput value={section.title} onChange={e=>onChange({...section,title:e.target.value})} placeholder="Section name…"/></VRow>
+        <VDivider/>
+        <VSecTitle>Repeat Behaviour</VSecTitle>
+        <div style={{background:s.repeatable?V.primaryBg:V.bgApp,border:`1px solid ${s.repeatable?V.primary+"44":V.borderLight}`,borderRadius:V.r4,padding:V.s4,marginBottom:V.s3,transition:"all .2s"}}>
+          <div style={{marginBottom:V.s3}}><VToggle checked={!!s.repeatable} onChange={v=>updS({repeatable:v})} label="Allow user to repeat this section"/></div>
+          <div style={{fontSize:V.xs,color:V.textSecondary,lineHeight:1.5}}>When enabled, a button appears below the section letting respondents add additional copies — useful for medications, procedures, crew members, etc.</div>
+        </div>
+        {s.repeatable&&<>
+          <VRow label="Add Button Label" hint="Text shown on the repeat button"><VInput value={s.repeatLabel||"+ Add Another"} onChange={e=>updS({repeatLabel:e.target.value})} placeholder="+ Add Another"/></VRow>
+          <VRow label="Max Repetitions" hint="Max copies including the first"><VInput type="number" value={s.maxRepeats||10} onChange={e=>updS({maxRepeats:parseInt(e.target.value)||2})} min="2" max="50"/></VRow>
+        </>}
+        <VDivider/>
+        <VSecTitle>Section Export Keys</VSecTitle>
+        <div style={{fontSize:V.xs,color:V.textSecondary,marginBottom:V.s3,lineHeight:1.4}}>Keys assigned here apply to the entire section — useful for grouping repeated section data under a namespace in your export.</div>
+{/* Section-level key mapping removed — all keys go through field libraryRows */}
+      </div>
+    </div>
+  </div>;
+}
+
+
+// ─── findSelectedField: find a field by ID in rows ───────────────────────────
+function findSelectedField(rows, selFId) {
+  for (const row of rows) {
+    for (const cell of row.cells) {
+      const f = cell.fields.find(function(f) { return f.id === selFId; });
+      if (f) return f;
+    }
+  }
+  return null;
+}
+
+// ─── buildGroups: groups sorted rows by a key field ──────────────────────────
+function buildGroups(groupBy, sorted) {
+  if (groupBy === "none") return [{ key:"__all__", label:"All Rows", rows:sorted }];
+  const map = {};
+  sorted.forEach(function(row) {
+    const key = row[groupBy] || "(none)";
+    if (!map[key]) map[key] = [];
+    map[key].push(row);
+  });
+  return Object.entries(map)
+    .sort(function(a,b) { return a[0].localeCompare(b[0]); })
+    .map(function(entry) { return { key:entry[0], label:entry[0], rows:entry[1] }; });
+}
+
+// ─── LibColHdr: sortable column header for UnifiedLibraryBrowser ─────────────
+function LibColHdr({ col, label, flex, sortCol, sortDir, onSort }) {
+  const active = sortCol === col;
+  return (
+    <div onClick={() => onSort(col)}
+      style={{ flex: flex||1, display:"flex", alignItems:"center", gap:3, cursor:"pointer",
+        fontSize:V.xs, fontWeight:700, color:active?V.primary:V.textDisabled,
+        textTransform:"uppercase", letterSpacing:".06em", fontFamily:V.font,
+        userSelect:"none", padding:"0 4px" }}
+      onMouseEnter={e=>e.currentTarget.style.color=V.primary}
+      onMouseLeave={e=>e.currentTarget.style.color=active?V.primary:V.textDisabled}>
+      {label} {active && <span style={{fontSize:9}}>{sortDir==="asc"?"↑":"↓"}</span>}
+    </div>
+  );
+}
+
+// ─── LibMultiSelect: multi-select dropdown for category/sub-cat filtering ─────
+function LibMultiSelect({ label, options, value, onChange, open, setOpen }) {
+  return (
+    <div style={{ position:"relative" }}>
+      <button onClick={() => setOpen(o=>!o)} style={{
+        display:"flex", alignItems:"center", gap:V.s1, padding:"4px 10px",
+        border:`1px solid ${value.length>0?V.primary:V.border}`, borderRadius:V.r2,
+        background:value.length>0?V.primaryLight:"#fff", cursor:"pointer",
+        fontSize:V.sm, fontFamily:V.font, fontWeight:value.length>0?700:400,
+        color:value.length>0?V.primary:V.textSecondary, transition:"all .12s", whiteSpace:"nowrap",
+      }}>
+        {label}{value.length>0 && <span style={{background:V.primary,color:"#fff",borderRadius:V.rFull,fontSize:9,padding:"1px 5px",fontWeight:700,marginLeft:4}}>{value.length}</span>}
+        <span style={{fontSize:9,opacity:.6,marginLeft:2}}>▾</span>
+      </button>
+      {open && (
+        <div style={{ position:"absolute", top:"calc(100% + 4px)", left:0, zIndex:500,
+          background:V.bgSurface, border:`1px solid ${V.borderLight}`, borderRadius:V.r3,
+          boxShadow:V.shadow2, minWidth:180, maxHeight:240, overflowY:"auto", padding:V.s1 }}>
+          {value.length>0 && (
+            <div onClick={()=>{onChange([]);setOpen(false);}}
+              style={{padding:"4px 10px",fontSize:V.xs,color:V.negative,cursor:"pointer",
+                fontFamily:V.font,fontWeight:600,borderBottom:`1px solid ${V.borderLight}`,marginBottom:2}}>
+              Clear all
+            </div>
+          )}
+          {options.map(opt => {
+            const on = value.includes(opt);
+            return (
+              <div key={opt} onClick={()=>onChange(on?value.filter(x=>x!==opt):[...value,opt])}
+                style={{display:"flex",alignItems:"center",gap:V.s2,padding:"5px 10px",
+                  borderRadius:V.r2,cursor:"pointer",
+                  background:on?V.primaryBg:"transparent",transition:"background .1s"}}
+                onMouseEnter={e=>{if(!on)e.currentTarget.style.background=V.bgHover;}}
+                onMouseLeave={e=>{if(!on)e.currentTarget.style.background="transparent";}}>
+                <div style={{width:14,height:14,borderRadius:3,
+                  border:`2px solid ${on?V.primary:V.border}`,
+                  background:on?V.primary:"#fff",
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  flexShrink:0,transition:"all .1s"}}>
+                  {on && <span style={{color:"#fff",fontSize:8,fontWeight:700,lineHeight:1}}>✓</span>}
+                </div>
+                <span style={{fontSize:V.sm,color:V.textPrimary,fontFamily:V.font}}>{opt}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── renderLibRowLabel: highlight search match in library row label ──────────
+function renderLibRowLabel(label, search) {
+  if (!search || !label) return label || React.createElement("span", {style:{color:V.textDisabled,fontStyle:"italic"}}, "—");
+  const idx = label.toLowerCase().indexOf(search.toLowerCase());
+  if (idx === -1) return label;
+  return (
+    <span>
+      {label.slice(0, idx)}
+      <mark style={{background:"#fff176",color:V.textPrimary,padding:0,borderRadius:2}}>{label.slice(idx, idx+search.length)}</mark>
+      {label.slice(idx+search.length)}
+    </span>
+  );
+}
+
+// ─── LibRowItem: single data row in UnifiedLibraryBrowser table ───────────────
+function LibRowItem({ row, mode, isSelected, onToggle, onEdit, onDelete, canEdit, canDelete, editingRowId, editDraft, setEditDraft, onSave, onCancelEdit, availableCats, search }) {
+  const sel = isSelected(row);
+  const editing = editingRowId === row.id;
+  const catColor = row.category === "Pertinent Negative" ? CAT.layout :
+                   row.category === "NOT Value"          ? CAT.choice :
+                   row.category === "Nillable Marker"    ? CAT.advanced : CAT.basic;
+
+  if (editing && canEdit) {
+    return (
+      <div style={{ display:"flex", alignItems:"center", gap:V.s1, padding:"4px 6px",
+        background:V.primaryBg, borderBottom:`1px solid ${V.borderLight}` }}>
+        {mode==="browse" && <div style={{width:20,flexShrink:0}}/>}
+        <input value={editDraft.label||""} onChange={e=>setEditDraft(d=>({...d,label:e.target.value}))}
+          style={{flex:2,fontSize:V.sm,padding:"3px 6px",border:`1px solid ${V.borderFocus}`,borderRadius:V.r2,fontFamily:V.font}} placeholder="Label"/>
+        <input value={editDraft.code||""} onChange={e=>setEditDraft(d=>({...d,code:e.target.value}))}
+          style={{flex:1,fontSize:V.sm,padding:"3px 6px",border:`1px solid ${V.border}`,borderRadius:V.r2,fontFamily:V.font}} placeholder="Code"/>
+        <input value={editDraft.exportKey||""} onChange={e=>setEditDraft(d=>({...d,exportKey:e.target.value}))}
+          style={{flex:1.5,fontSize:V.sm,padding:"3px 6px",border:`1px solid ${V.border}`,borderRadius:V.r2,fontFamily:V.font}} placeholder="Export Key"/>
+        <select value={editDraft.category||""}
+          onChange={e=>setEditDraft(d=>({...d,category:e.target.value}))}
+          style={{flex:1,fontSize:V.sm,padding:"3px 6px",border:`1px solid ${V.border}`,borderRadius:V.r2,fontFamily:V.font}}>
+          {availableCats.map(c=><option key={c}>{c}</option>)}
+        </select>
+        <input value={editDraft.subCategory||""} onChange={e=>setEditDraft(d=>({...d,subCategory:e.target.value}))}
+          style={{flex:1,fontSize:V.sm,padding:"3px 6px",border:`1px solid ${V.border}`,borderRadius:V.r2,fontFamily:V.font}} placeholder="Sub-Cat"/>
+        <div style={{display:"flex",gap:4,flexShrink:0}}>
+          <button onClick={onSave}
+            style={{background:V.positive,color:"#fff",border:"none",borderRadius:V.r2,padding:"3px 10px",fontSize:V.xs,cursor:"pointer",fontWeight:700,fontFamily:V.font}}>Save</button>
+          <button onClick={onCancelEdit}
+            style={{background:V.bgHover,border:`1px solid ${V.border}`,borderRadius:V.r2,padding:"3px 8px",fontSize:V.xs,cursor:"pointer",fontFamily:V.font}}>Cancel</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      display:"flex", alignItems:"center", gap:V.s1,
+      padding:"5px 6px", borderBottom:`1px solid ${V.borderLight}`,
+      background:sel?V.primaryBg:"transparent", transition:"background .1s",
+      cursor:mode==="browse"?"pointer":"default",
+    }}
+      onClick={mode==="browse" ? ()=>onToggle(row) : undefined}
+      onMouseEnter={e=>{if(!sel&&mode==="browse")e.currentTarget.style.background=V.bgHover;}}
+      onMouseLeave={e=>{if(!sel)e.currentTarget.style.background=sel?V.primaryBg:"transparent";}}>
+
+      {mode==="browse" && (
+        <div style={{width:20,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{width:15,height:15,borderRadius:3,
+            border:`2px solid ${sel?V.primary:V.border}`,
+            background:sel?V.primary:"#fff",
+            display:"flex",alignItems:"center",justifyContent:"center",transition:"all .1s"}}>
+            {sel && <span style={{color:"#fff",fontSize:8,fontWeight:700,lineHeight:1}}>✓</span>}
+          </div>
+        </div>
+      )}
+
+      <div style={{flex:2,fontSize:V.sm,fontWeight:sel?600:400,color:V.textPrimary,fontFamily:V.font,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0}}>
+        {renderLibRowLabel(row.label, search)}
+      </div>
+      <div style={{flex:1,minWidth:0}}>
+        {row.code
+          ? <code style={{fontSize:9,color:V.textSecondary,fontFamily:"monospace",background:V.bgHover,padding:"1px 4px",borderRadius:3}}>{row.code}</code>
+          : <span style={{fontSize:V.xs,color:V.textDisabled}}>—</span>}
+      </div>
+      <div style={{flex:1.5,minWidth:0}}>
+        <code style={{fontSize:9,color:V.primary,fontFamily:"monospace",background:search&&row.exportKey?.toLowerCase().includes(search.toLowerCase())?"#fff176":V.primaryLight,padding:"1px 5px",borderRadius:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"inline-block",maxWidth:"100%"}}>{row.exportKey||"—"}</code>
+      </div>
+      <div style={{flex:1,minWidth:0}}>
+        <span style={{fontSize:9,padding:"1px 6px",borderRadius:V.rFull,background:catColor.bg,color:catColor.text,fontWeight:700,fontFamily:V.font,whiteSpace:"nowrap"}}>{row.category||"—"}</span>
+      </div>
+      <div style={{flex:1,fontSize:V.xs,color:V.textSecondary,fontFamily:V.font,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0}}>
+        {row.subCategory||"—"}
+      </div>
+      {mode==="manage" && canEdit && (
+        <div style={{display:"flex",gap:3,flexShrink:0}}>
+          <button onClick={()=>onEdit(row)}
+            style={{background:"none",border:`1px solid ${V.borderLight}`,borderRadius:V.r2,padding:"2px 7px",fontSize:V.xs,cursor:"pointer",color:V.textSecondary,fontFamily:V.font}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor=V.primary;e.currentTarget.style.color=V.primary;}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor=V.borderLight;e.currentTarget.style.color=V.textSecondary;}}>Edit</button>
+          {canDelete && (
+            <button onClick={()=>onDelete(row.id)}
+              style={{background:"none",border:"none",cursor:"pointer",color:V.textDisabled,fontSize:14,padding:"0 3px",lineHeight:1}}
+              onMouseEnter={e=>e.target.style.color=V.negative}
+              onMouseLeave={e=>e.target.style.color=V.textDisabled}>×</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── renderUnifiedLibraryBrowser: JSX render for UnifiedLibraryBrowser ───────
+function renderUnifiedLibraryBrowser(p) {
+  const {
+    libraries, onUpdateLibraries, onClose, mode, onSelect, currentRole,
+    activeLibId, setActiveLibId, search, setSearch,
+    filterCats, setFilterCats, filterSubCats, setFilterSubCats,
+    groupBy, setGroupBy, sortCol, sortDir, toggleSort,
+    selected, expandedGroups, setExpandedGroups,
+    editingRowId, setEditingRowId, editDraft, setEditDraft,
+    activeTab, setActiveTab, catDropOpen, setCatDropOpen,
+    subCatDropOpen, setSubCatDropOpen,
+    lib, canEdit, canDelete, allRows, sorted, grouped,
+    availableSubCats, availableCats, hasFilters,
+    clearFilters, addRow, saveRow, deleteRow, addLibrary,
+    isSelected, toggleRow, toggleGroup, updLib,
+  } = p;
+
+  const allDone = mode === "browse" && selected.length > 0;
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(28,31,59,0.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:4000,backdropFilter:"blur(2px)"}} onClick={onClose}>
+      <div onClick={function(e){e.stopPropagation();}} style={{background:V.bgSurface,borderRadius:V.r5,width:"min(1060px,97vw)",height:"min(700px,94vh)",display:"flex",flexDirection:"column",boxShadow:V.shadow3,overflow:"hidden",fontFamily:V.font}}>
+
+        {/* Header */}
+        <div style={{padding:`${V.s3} ${V.s5}`,borderBottom:`1px solid ${V.borderLight}`,display:"flex",alignItems:"center",gap:V.s3,flexShrink:0,background:V.bgApp}}>
+          <div style={{width:34,height:34,borderRadius:V.r3,background:V.primaryBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>📚</div>
+          <div style={{flex:1}}>
+            <div style={{fontWeight:700,fontSize:V.lg,color:V.textPrimary}}>{mode==="browse"?"Browse Data Libraries":"Data Libraries — Manage"}</div>
+            <div style={{fontSize:V.sm,color:V.textSecondary}}>{mode==="browse"?"Select rows to assign as export keys for this field":"Add, edit and manage library data elements"}</div>
+          </div>
+          {mode==="browse" && selected.length>0 && <span style={{fontSize:V.xs,padding:"3px 10px",borderRadius:V.rFull,background:V.primaryLight,color:V.primary,fontWeight:700,fontFamily:V.font}}>{selected.length} selected</span>}
+          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:V.textDisabled,fontSize:20,lineHeight:1,padding:V.s2}} onMouseEnter={function(e){e.target.style.color=V.negative;}} onMouseLeave={function(e){e.target.style.color=V.textDisabled;}}>×</button>
+        </div>
+
+        <div style={{display:"flex",flex:1,overflow:"hidden"}}>
+
+          {/* Left: Library list */}
+          <div style={{width:200,borderRight:`1px solid ${V.borderLight}`,display:"flex",flexDirection:"column",flexShrink:0}}>
+            <div style={{padding:`${V.s2} ${V.s3}`,borderBottom:`1px solid ${V.borderLight}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <span style={{fontSize:V.xs,fontWeight:700,color:V.textDisabled,textTransform:"uppercase",letterSpacing:".08em"}}>Libraries</span>
+              {mode==="manage" && <button onClick={addLibrary} style={{background:V.primary,border:"none",color:"#fff",width:20,height:20,borderRadius:V.r2,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>+</button>}
+            </div>
+            <div style={{overflowY:"auto",flex:1}}>
+              {libraries.map(function(l) {
+                const isAct = l.id === activeLibId;
+                return (
+                  <div key={l.id}
+                    onClick={function(){setActiveLibId(l.id);setSearch("");setFilterCats([]);setFilterSubCats([]);}}
+                    style={{display:"flex",alignItems:"center",gap:V.s2,padding:`${V.s3} ${V.s3}`,cursor:"pointer",background:isAct?V.bgSelected:"transparent",borderBottom:`1px solid ${V.borderLight}`,transition:"background .1s"}}
+                    onMouseEnter={function(e){if(!isAct)e.currentTarget.style.background=V.bgHover;}}
+                    onMouseLeave={function(e){if(!isAct)e.currentTarget.style.background="transparent";}}>
+                    <span style={{fontSize:14,flexShrink:0}}>{l.icon}</span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:V.sm,fontWeight:isAct?700:500,color:isAct?V.primary:V.textPrimary,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.name}</div>
+                      <div style={{fontSize:V.xs,color:V.textDisabled}}>{(l.rows||[]).length} rows</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right: Table area */}
+          <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+
+            {/* Manage mode tabs */}
+            {mode==="manage" && (
+              <div style={{display:"flex",borderBottom:`1px solid ${V.borderLight}`,flexShrink:0,padding:`0 ${V.s4}`}}>
+                {[["table","Table"],["settings","Library Settings"]].map(function(pair) {
+                  const id = pair[0]; const lb = pair[1];
+                  return <button key={id} onClick={function(){setActiveTab(id);}} style={{padding:`${V.s3} ${V.s2}`,border:"none",background:"none",cursor:"pointer",fontSize:V.sm,fontWeight:activeTab===id?700:400,color:activeTab===id?V.primary:V.textSecondary,borderBottom:activeTab===id?`2px solid ${V.primary}`:"2px solid transparent",marginBottom:-1,fontFamily:V.font,marginRight:V.s4}}>{lb}</button>;
+                })}
+              </div>
+            )}
+
+            {/* Library Settings tab */}
+            {mode==="manage" && activeTab==="settings" && lib && (
+              <div style={{overflowY:"auto",flex:1,padding:V.s5}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:V.s4,maxWidth:540}}>
+                  <div><VLabel>Library Name</VLabel><VInput value={lib.name} onChange={function(e){updLib({name:e.target.value});}}/></div>
+                  <div><VLabel>Icon (emoji)</VLabel><VInput value={lib.icon} onChange={function(e){updLib({icon:e.target.value});}}/></div>
+                  <div style={{gridColumn:"1/-1"}}><VLabel>Description</VLabel><VInput value={lib.description||""} onChange={function(e){updLib({description:e.target.value});}} placeholder="What is this library for?"/></div>
+                  <div><VLabel>Version</VLabel><VInput value={lib.version||""} onChange={function(e){updLib({version:e.target.value});}} placeholder="1.0"/></div>
+                  <div><VLabel>Source</VLabel>
+                    <select value={lib.source||"custom"} onChange={function(e){updLib({source:e.target.value});}} style={{width:"100%",padding:"7px 10px",fontSize:V.md,border:`1px solid ${V.border}`,borderRadius:V.r2,background:V.bgSurface,fontFamily:V.font}}>
+                      <option value="custom">Custom</option>
+                      <option value="monday_board">monday.com Board</option>
+                      <option value="builtin">Built-in</option>
+                    </select>
+                  </div>
+                  {lib.source==="monday_board" && <div style={{gridColumn:"1/-1"}}><VLabel>monday.com Board ID</VLabel><VInput value={lib.mondayBoardId||""} onChange={function(e){updLib({mondayBoardId:e.target.value});}} placeholder="e.g. 1234567890"/></div>}
+                </div>
+                <VDivider/>
+                <VSecTitle>Categories</VSecTitle>
+                <div style={{display:"flex",flexWrap:"wrap",gap:V.s2,marginBottom:V.s3}}>
+                  {(lib.categories||[]).map(function(c) {
+                    return (
+                      <span key={c} style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 10px",borderRadius:V.rFull,background:V.bgHover,border:`1px solid ${V.borderLight}`,fontSize:V.sm,fontFamily:V.font}}>
+                        {c}
+                        {canEdit && <button onClick={function(){updLib({categories:(lib.categories||[]).filter(function(x){return x!==c;})});}} style={{background:"none",border:"none",cursor:"pointer",color:V.textDisabled,fontSize:12,padding:0,lineHeight:1}} onMouseEnter={function(e){e.target.style.color=V.negative;}} onMouseLeave={function(e){e.target.style.color=V.textDisabled;}}>×</button>}
+                      </span>
+                    );
+                  })}
+                  {canEdit && <input placeholder="+ Add category" onKeyDown={function(e){if(e.key==="Enter"&&e.target.value.trim()){updLib({categories:[...(lib.categories||[]),e.target.value.trim()]});e.target.value="";}}} style={{padding:"3px 10px",borderRadius:V.rFull,border:`1px dashed ${V.border}`,fontSize:V.sm,fontFamily:V.font,background:"#fff",outline:"none",minWidth:130}}/>}
+                </div>
+                <VSecTitle>Sub-Categories</VSecTitle>
+                <div style={{display:"flex",flexWrap:"wrap",gap:V.s2}}>
+                  {(lib.subCategories||[]).map(function(c) {
+                    return (
+                      <span key={c} style={{display:"inline-flex",alignItems:"center",gap:4,padding:"3px 10px",borderRadius:V.rFull,background:V.bgHover,border:`1px solid ${V.borderLight}`,fontSize:V.sm,fontFamily:V.font}}>
+                        {c}
+                        {canEdit && <button onClick={function(){updLib({subCategories:(lib.subCategories||[]).filter(function(x){return x!==c;})});}} style={{background:"none",border:"none",cursor:"pointer",color:V.textDisabled,fontSize:12,padding:0,lineHeight:1}} onMouseEnter={function(e){e.target.style.color=V.negative;}} onMouseLeave={function(e){e.target.style.color=V.textDisabled;}}>×</button>}
+                      </span>
+                    );
+                  })}
+                  {canEdit && <input placeholder="+ Add sub-category" onKeyDown={function(e){if(e.key==="Enter"&&e.target.value.trim()){updLib({subCategories:[...(lib.subCategories||[]),e.target.value.trim()]});e.target.value="";}}} style={{padding:"3px 10px",borderRadius:V.rFull,border:`1px dashed ${V.border}`,fontSize:V.sm,fontFamily:V.font,background:"#fff",outline:"none",minWidth:160}}/>}
+                </div>
+              </div>
+            )}
+
+            {/* Table tab */}
+            {(mode==="browse" || activeTab==="table") && (
+              <div style={{display:"flex",flexDirection:"column",flex:1,overflow:"hidden"}}>
+                {/* Toolbar */}
+                <div style={{padding:`${V.s2} ${V.s3}`,borderBottom:`1px solid ${V.borderLight}`,display:"flex",alignItems:"center",gap:V.s2,flexWrap:"wrap",flexShrink:0,background:V.bgApp}}>
+                  <div style={{position:"relative",flex:"1 1 180px",minWidth:140}}>
+                    <span style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",color:V.textDisabled,fontSize:13,pointerEvents:"none"}}>🔍</span>
+                    <input value={search} onChange={function(e){setSearch(e.target.value);}} placeholder="Search label, code, key…"
+                      style={{width:"100%",padding:"5px 10px 5px 28px",fontSize:V.sm,border:`1px solid ${search?V.borderFocus:V.border}`,borderRadius:V.r2,background:search?V.primaryBg:V.bgSurface,color:V.textPrimary,outline:"none",fontFamily:V.font,boxSizing:"border-box",transition:"all .12s"}}/>
+                  </div>
+                  <LibMultiSelect label="Category" options={availableCats} value={filterCats}
+                    onChange={function(v){setFilterCats(v);setCatDropOpen(false);}}
+                    open={catDropOpen} setOpen={function(v){setCatDropOpen(v);setSubCatDropOpen(false);}}/>
+                  <LibMultiSelect label="Sub-Category" options={availableSubCats} value={filterSubCats}
+                    onChange={function(v){setFilterSubCats(v);setSubCatDropOpen(false);}}
+                    open={subCatDropOpen} setOpen={function(v){setSubCatDropOpen(v);setCatDropOpen(false);}}/>
+                  {hasFilters && <button onClick={clearFilters} style={{background:"none",border:`1px solid ${V.borderLight}`,borderRadius:V.r2,padding:"4px 10px",fontSize:V.xs,cursor:"pointer",color:V.textSecondary,fontFamily:V.font,fontWeight:600}} onMouseEnter={function(e){e.currentTarget.style.borderColor=V.negative;e.currentTarget.style.color=V.negative;}} onMouseLeave={function(e){e.currentTarget.style.borderColor=V.borderLight;e.currentTarget.style.color=V.textSecondary;}}>✕ Clear</button>}
+                  <select value={groupBy} onChange={function(e){setGroupBy(e.target.value);}} style={{padding:"4px 8px",fontSize:V.xs,border:`1px solid ${V.border}`,borderRadius:V.r2,fontFamily:V.font,background:"#fff",cursor:"pointer"}}>
+                    <option value="category">Group by Category</option>
+                    <option value="subCategory">Group by Sub-Category</option>
+                    <option value="none">No Grouping</option>
+                  </select>
+                  <div style={{flex:1}}/>
+                  <span style={{fontSize:V.xs,color:V.textDisabled,fontFamily:V.font}}>{sorted.length} of {allRows.length} rows</span>
+                  {mode==="manage" && canEdit && <button onClick={addRow} style={{background:V.primary,color:"#fff",border:"none",borderRadius:V.r2,padding:"4px 12px",fontSize:V.xs,cursor:"pointer",fontWeight:700,fontFamily:V.font,display:"flex",alignItems:"center",gap:4}}>+ Add Row</button>}
+                </div>
+
+                {/* Column headers */}
+                <div style={{display:"flex",alignItems:"center",gap:V.s1,padding:"6px 6px",borderBottom:`2px solid ${V.borderLight}`,background:V.bgApp,flexShrink:0}}>
+                  {mode==="browse" && <div style={{width:20,flexShrink:0}}/>}
+                  <LibColHdr col="label"       label="Label"      flex={2}   sortCol={sortCol} sortDir={sortDir} onSort={toggleSort}/>
+                  <LibColHdr col="code"        label="Code"       flex={1}   sortCol={sortCol} sortDir={sortDir} onSort={toggleSort}/>
+                  <LibColHdr col="exportKey"   label="Export Key" flex={1.5} sortCol={sortCol} sortDir={sortDir} onSort={toggleSort}/>
+                  <LibColHdr col="category"    label="Category"   flex={1}   sortCol={sortCol} sortDir={sortDir} onSort={toggleSort}/>
+                  <LibColHdr col="subCategory" label="Sub-Cat"    flex={1}   sortCol={sortCol} sortDir={sortDir} onSort={toggleSort}/>
+                  {mode==="manage" && canEdit && <div style={{width:80,flexShrink:0}}/>}
+                </div>
+
+                {/* Rows */}
+                <div style={{overflowY:"auto",flex:1}} onClick={function(){setCatDropOpen(false);setSubCatDropOpen(false);}}>
+                  {grouped.length===0 && (
+                    <div style={{padding:V.s5,textAlign:"center",color:V.textDisabled,fontFamily:V.font,fontSize:V.sm}}>
+                      {hasFilters ? "No rows match your filters." : "No rows in this library."}
+                    </div>
+                  )}
+                  {grouped.map(function(group) {
+                    const isExpanded = expandedGroups[group.key] !== false;
+                    const allGroupSel = group.rows.every(function(r){return isSelected(r);});
+                    const someGroupSel = group.rows.some(function(r){return isSelected(r);});
+                    const catColor = group.key==="Pertinent Negative"?CAT.layout:group.key==="NOT Value"?CAT.choice:group.key==="Nillable Marker"?CAT.advanced:CAT.basic;
+                    return (
+                      <div key={group.key}>
+                        {groupBy !== "none" && (
+                          <div style={{display:"flex",alignItems:"center",gap:V.s2,padding:"6px 8px",background:V.bgApp,borderBottom:`1px solid ${V.borderLight}`,cursor:"pointer",userSelect:"none"}}
+                            onClick={function(){setExpandedGroups(function(eg){const n={...eg};n[group.key]=!isExpanded;return n;});}}>
+                            {mode==="browse" && (
+                              <div style={{width:15,height:15,borderRadius:3,border:`2px solid ${allGroupSel?V.primary:someGroupSel?V.primary:V.border}`,background:allGroupSel?V.primary:someGroupSel?"rgba(0,115,234,0.3)":"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .1s"}}
+                                onClick={function(e){e.stopPropagation();toggleGroup(group.rows);}}>
+                                {allGroupSel && <span style={{color:"#fff",fontSize:8,fontWeight:700,lineHeight:1}}>✓</span>}
+                                {!allGroupSel && someGroupSel && <span style={{color:V.primary,fontSize:8,fontWeight:700,lineHeight:1}}>—</span>}
+                              </div>
+                            )}
+                            <span style={{fontSize:9,color:V.textDisabled,marginLeft:mode==="browse"?V.s1:0}}>{isExpanded?"▼":"▶"}</span>
+                            <span style={{fontSize:V.xs,fontWeight:700,padding:"1px 8px",borderRadius:V.rFull,background:catColor.bg,color:catColor.text,fontFamily:V.font}}>{group.label}</span>
+                            <span style={{fontSize:V.xs,color:V.textDisabled,fontFamily:V.font}}>{group.rows.length} row{group.rows.length!==1?"s":""}</span>
+                          </div>
+                        )}
+                        {isExpanded && group.rows.map(function(row) {
+                          return (
+                            <LibRowItem
+                              key={row.id} row={row} mode={mode}
+                              isSelected={isSelected} onToggle={toggleRow}
+                              onEdit={function(r){setEditingRowId(r.id);setEditDraft({...r});}}
+                              onDelete={deleteRow}
+                              canEdit={canEdit} canDelete={canDelete}
+                              editingRowId={editingRowId} editDraft={editDraft}
+                              setEditDraft={setEditDraft}
+                              onSave={saveRow}
+                              onCancelEdit={function(){setEditingRowId(null);setEditDraft({});}}
+                              availableCats={availableCats}
+                              search={p.search}
+                            />
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{padding:`${V.s3} ${V.s5}`,borderTop:`1px solid ${V.borderLight}`,display:"flex",alignItems:"center",gap:V.s3,background:V.bgApp,flexShrink:0}}>
+          {mode==="browse" ? (
+            <>
+              <div style={{flex:1,fontSize:V.xs,color:V.textSecondary,fontFamily:V.font}}>
+                {selected.length===0 ? "Select rows to assign their export keys to this field" : `${selected.length} row${selected.length!==1?"s":""} selected`}
+              </div>
+              <VBtn variant="secondary" size="sm" onClick={onClose}>Cancel</VBtn>
+              <VBtn size="sm" onClick={function(){if(onSelect)onSelect(selected);onClose();}} style={{opacity:selected.length===0?0.4:1}}>
+                {selected.length>0 ? `Assign ${selected.length} Key${selected.length!==1?"s":""}` : "Assign Keys"}
+              </VBtn>
+            </>
+          ) : (
+            <>
+              <div style={{flex:1}}/>
+              <VBtn size="sm" onClick={onClose}>Done</VBtn>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── UnifiedLibraryBrowser ───────────────────────────────────────────────────
+// Single component, two modes:
+//   mode="browse"  → checkbox selection, returns selected rows via onSelect
+//   mode="manage"  → full CRUD table with inline editing
+function UnifiedLibraryBrowser({ libraries, onUpdateLibraries, onClose, mode="browse", onSelect, initialLibId, currentRole="editor" }) {
+  const [activeLibId, setActiveLibId] = useState(initialLibId || libraries[0]?.id);
+  const [search, setSearch] = useState("");
+  const [filterCats, setFilterCats] = useState([]);       // multi-select category filter
+  const [filterSubCats, setFilterSubCats] = useState([]);  // multi-select sub-cat filter
+  const [groupBy, setGroupBy] = useState("category");      // "category"|"subCategory"|"none"
+  const [sortCol, setSortCol] = useState("label");
+  const [sortDir, setSortDir] = useState("asc");
+  const [selected, setSelected] = useState([]);            // browse mode: [{libraryId,rowId,label,exportKey,category}]
+  const [expandedGroups, setExpandedGroups] = useState({});
+  const [editingRowId, setEditingRowId] = useState(null);
+  const [editDraft, setEditDraft] = useState({});
+  const [activeTab, setActiveTab] = useState("table");     // "table"|"settings"
+  const [catDropOpen, setCatDropOpen] = useState(false);
+  const [subCatDropOpen, setSubCatDropOpen] = useState(false);
+
+  const lib = libraries.find(l => l.id === activeLibId);
+  const canEdit = ["admin","editor"].includes(currentRole);
+  const canDelete = currentRole === "admin";
+
+  // ── Derived data ─────────────────────────────────────────────────────────
+  const allRows = lib?.rows || [];
+
+  // Filter
+  const filtered = allRows.filter(row => {
+    const q = search.toLowerCase();
+    const matchSearch = !q ||
+      row.label?.toLowerCase().includes(q) ||
+      row.code?.toLowerCase().includes(q) ||
+      row.exportKey?.toLowerCase().includes(q) ||
+      row.description?.toLowerCase().includes(q) ||
+      row.elementId?.toLowerCase().includes(q);
+    const matchCat = filterCats.length === 0 || filterCats.includes(row.category);
+    const matchSub = filterSubCats.length === 0 || filterSubCats.includes(row.subCategory);
+    return matchSearch && matchCat && matchSub;
+  });
+
+  // Sort
+  const sorted = [...filtered].sort(function(a, b) {
+    const av = (a[sortCol] || "").toLowerCase();
+    const bv = (b[sortCol] || "").toLowerCase();
+    return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+  });
+
+  // Group
+  const grouped = buildGroups(groupBy, sorted);
+
+  // Sub-categories available given current category filter
+  const subCatSource = filterCats.length > 0 ? allRows.filter(r => filterCats.includes(r.category)) : allRows;
+  const availableSubCats = [...new Set(subCatSource.map(r => r.subCategory).filter(Boolean))].sort();
+
+  // Available categories
+  const availableCats = [...new Set(allRows.map(r => r.category).filter(Boolean))].sort();
+
+  const toggleSort = col => {
+    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir("asc"); }
+  };
+
+  const clearFilters = () => { setSearch(""); setFilterCats([]); setFilterSubCats([]); };
+  const hasFilters = search || filterCats.length > 0 || filterSubCats.length > 0;
+
+  // ── Library mutations ─────────────────────────────────────────────────────
+  const updLib = patch => onUpdateLibraries(libraries.map(l => l.id === activeLibId ? { ...l, ...patch } : l));
+  const addRow = () => {
+    const newRow = { id:"row_"+uid(), label:"New Row", code:"", exportKey:"", description:"", category: availableCats[0]||"", subCategory:"", usage:"Optional", elementId:"" };
+    updLib({ rows:[...allRows, newRow] });
+    setEditingRowId(newRow.id);
+    setEditDraft({...newRow});
+  };
+  const saveRow = () => {
+    updLib({ rows: allRows.map(r => r.id === editingRowId ? {...r, ...editDraft} : r) });
+    setEditingRowId(null); setEditDraft({});
+  };
+  const deleteRow = id => updLib({ rows: allRows.filter(r => r.id !== id) });
+  const addLibrary = () => {
+    const id = "lib_"+uid();
+    const newLib = { id, name:"New Library", icon:"📚", description:"", color:V.primary, version:"1.0", source:"custom", mondayBoardId:null, columns:[...SYSTEM_COLUMNS], categories:[], subCategories:[], permissions:{canView:["admin","editor","viewer"],canEdit:["admin","editor"],canDelete:["admin"]}, rows:[] };
+    onUpdateLibraries([...libraries, newLib]);
+    setActiveLibId(id);
+  };
+
+  // ── Selection (browse mode) ───────────────────────────────────────────────
+  const isSelected = row => selected.some(s => s.rowId === row.id && s.libraryId === activeLibId);
+  const toggleRow = row => {
+    if (isSelected(row)) setSelected(s => s.filter(x => !(x.rowId === row.id && x.libraryId === activeLibId)));
+    else setSelected(s => [...s, { libraryId:activeLibId, rowId:row.id, label:row.label, exportKey:row.exportKey, code:row.code, category:row.category, subCategory:row.subCategory }]);
+  };
+  const toggleGroup = (groupRows) => {
+    const allSel = groupRows.every(r => isSelected(r));
+    if (allSel) setSelected(s => s.filter(x => !groupRows.some(r => r.id === x.rowId && activeLibId === x.libraryId)));
+    else {
+      const toAdd = groupRows.filter(r => !isSelected(r)).map(r => ({ libraryId:activeLibId, rowId:r.id, label:r.label, exportKey:r.exportKey, code:r.code, category:r.category, subCategory:r.subCategory }));
+      setSelected(s => [...s, ...toAdd]);
+    }
+  };
+
+
+
+
+  const props = {
+    libraries, onUpdateLibraries, onClose, mode, onSelect, currentRole,
+    activeLibId, setActiveLibId, search, setSearch,
+    filterCats, setFilterCats, filterSubCats, setFilterSubCats,
+    groupBy, setGroupBy, sortCol, sortDir, toggleSort,
+    selected, setSelected, expandedGroups, setExpandedGroups,
+    editingRowId, setEditingRowId, editDraft, setEditDraft,
+    activeTab, setActiveTab, catDropOpen, setCatDropOpen,
+    subCatDropOpen, setSubCatDropOpen,
+    lib, canEdit, canDelete, allRows, filtered, sorted, grouped,
+    availableSubCats, availableCats, hasFilters,
+    clearFilters, addRow, saveRow, deleteRow, addLibrary,
+    isSelected, toggleRow, toggleGroup, updLib,
+  };
+  return renderUnifiedLibraryBrowser(props)
+}
+
+// ─── FieldKeysPanel ──────────────────────────────────────────────────────────
+// Shows assigned library rows, category-based chip toggles, and Browse button.
+function FieldKeysPanel({ field, libraries, onChange, onUpdateLibraries }) {
+  const [showBrowser, setShowBrowser] = useState(false);
+  const upd = p => onChange({ ...field, ...p });
+  const rows = field.libraryRows || [];
+  const da   = field.dataAttrs || { showCategories:[], isNillable:false };
+  const updDA = p => upd({ dataAttrs: { ...da, ...p } });
+
+  const removeRow = rowId => upd({ libraryRows: rows.filter(r => r.rowId !== rowId) });
+
+  const handleSelect = selected => {
+    // Merge: keep existing rows not duplicated, add new ones
+    const existing = rows.filter(r => !selected.some(s => s.rowId === r.rowId && s.libraryId === r.libraryId));
+    upd({ libraryRows: [...existing, ...selected] });
+  };
+
+  // All categories present in assigned rows
+  const assignedCats = [...new Set(rows.map(r => r.category).filter(Boolean))];
+  // All categories available in any library for display as toggle options
+  const allCats = [...new Set(libraries.flatMap(l => l.categories||[]))];
+  // Special categories that drive chip visibility
+  const CHIP_CATS = ["NOT Value","Pertinent Negative","Nillable Marker"];
+
+  const catColor = cat =>
+    cat === "Pertinent Negative" ? CAT.layout :
+    cat === "NOT Value"          ? CAT.choice :
+    cat === "Nillable Marker"    ? CAT.advanced : CAT.basic;
+
+  return (
+    <div>
+      <VSecTitle>Export Keys & Data Attributes</VSecTitle>
+
+      {/* Assigned rows */}
+      {rows.length > 0 ? (
+        <div style={{marginBottom:V.s3}}>
+          <div style={{fontSize:V.xs,color:V.textSecondary,marginBottom:V.s2,fontFamily:V.font}}>
+            {rows.length} key{rows.length!==1?"s":""} assigned — these export keys map to this field on submission
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:3}}>
+            {rows.map(r => {
+              const c = catColor(r.category);
+              return (
+                <div key={r.rowId} style={{display:"flex",alignItems:"center",gap:V.s2,padding:"4px 8px",borderRadius:V.r2,border:`1px solid ${V.borderLight}`,background:V.bgSurface}}>
+                  <span style={{fontSize:9,padding:"1px 6px",borderRadius:V.rFull,background:c.bg,color:c.text,fontWeight:700,fontFamily:V.font,flexShrink:0}}>{r.category||"—"}</span>
+                  <span style={{fontSize:V.sm,fontWeight:600,color:V.textPrimary,fontFamily:V.font,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.label}</span>
+                  <code style={{fontSize:9,color:V.primary,background:V.primaryLight,padding:"1px 5px",borderRadius:3,fontFamily:"monospace",flexShrink:0}}>{r.exportKey}</code>
+                  <button onClick={()=>removeRow(r.rowId)} style={{background:"none",border:"none",cursor:"pointer",color:V.textDisabled,fontSize:14,padding:0,lineHeight:1,flexShrink:0}} onMouseEnter={e=>e.target.style.color=V.negative} onMouseLeave={e=>e.target.style.color=V.textDisabled}>×</button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div style={{padding:`${V.s3} ${V.s3}`,background:V.bgApp,borderRadius:V.r3,border:`1px dashed ${V.border}`,marginBottom:V.s3,fontSize:V.xs,color:V.textDisabled,fontFamily:V.font,textAlign:"center"}}>
+          No export keys assigned. Browse libraries to assign keys.
+        </div>
+      )}
+
+      {/* Browse button */}
+      <VBtn variant="ghost" size="sm" onClick={()=>setShowBrowser(true)} style={{width:"100%",justifyContent:"center",marginBottom:V.s3}}>
+        🔍 Browse & Assign Keys
+      </VBtn>
+
+      {/* Show-to-respondent toggles for chip categories */}
+      {CHIP_CATS.some(c => rows.some(r => r.category === c)) && <>
+        <VDivider/>
+        <VSecTitle>Show to Respondent</VSecTitle>
+        <div style={{fontSize:V.xs,color:V.textSecondary,marginBottom:V.s3,fontFamily:V.font,lineHeight:1.5}}>
+          When a respondent fills this field, show these as selectable options (chips).
+        </div>
+        {CHIP_CATS.filter(c => rows.some(r => r.category === c)).map(cat => {
+          const c = catColor(cat);
+          const on = (da.showCategories||[]).includes(cat);
+          const rowsInCat = rows.filter(r => r.category === cat);
+          return (
+            <div key={cat} style={{display:"flex",alignItems:"flex-start",gap:V.s3,padding:V.s3,borderRadius:V.r3,border:`1.5px solid ${on?c.dot+"44":V.borderLight}`,background:on?c.bg+"55":V.bgSurface,marginBottom:V.s2,transition:"all .15s"}}>
+              <div style={{paddingTop:2,flexShrink:0}}>
+                <VToggle checked={on} onChange={v=>updDA({showCategories:v?[...(da.showCategories||[]),cat]:(da.showCategories||[]).filter(x=>x!==cat)})} label=""/>
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:V.sm,fontWeight:700,color:on?c.text:V.textPrimary,fontFamily:V.font,marginBottom:2}}>{cat}</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:2}}>
+                  {rowsInCat.slice(0,5).map(r=><span key={r.rowId} style={{fontSize:9,padding:"1px 6px",borderRadius:V.rFull,background:c.bg,color:c.text,fontWeight:600,fontFamily:V.font,border:`1px solid ${c.dot}33`}}>{r.label}</span>)}
+                  {rowsInCat.length>5 && <span style={{fontSize:9,color:V.textDisabled,fontFamily:V.font}}>+{rowsInCat.length-5} more</span>}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </>}
+
+      {/* Is Nillable */}
+      {rows.some(r => r.category === "Nillable Marker") && <>
+        <VDivider/>
+        <div style={{padding:V.s3,borderRadius:V.r3,border:`1.5px solid ${da.isNillable?CAT.advanced.dot+"44":V.borderLight}`,background:da.isNillable?CAT.advanced.bg+"55":V.bgSurface,transition:"all .2s"}}>
+          <VToggle checked={!!da.isNillable} onChange={v=>updDA({isNillable:v})} label="Is Nillable"/>
+          <div style={{fontSize:V.xs,color:V.textSecondary,marginTop:V.s1,fontFamily:V.font,lineHeight:1.4}}>
+            When enabled and the field is left blank, the Nillable Marker export key is auto-submitted.
+          </div>
+        </div>
+      </>}
+
+      {showBrowser && (
+        <UnifiedLibraryBrowser
+          libraries={libraries}
+          onUpdateLibraries={onUpdateLibraries || (()=>{})}
+          mode="browse"
+          onSelect={handleSelect}
+          onClose={()=>setShowBrowser(false)}
+          initialLibId={libraries[0]?.id}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── DataAttrSelect: renders category chips in live preview ─────────────────
+// Now driven by field.libraryRows + field.dataAttrs.showCategories
+function DataAttrSelect({ field, libraries }) {
+  const rows = field.libraryRows || [];
+  const showCats = field.dataAttrs?.showCategories || [];
+  const visibleRows = rows.filter(r => showCats.includes(r.category));
+  if (visibleRows.length === 0) return null;
+
+  // Group by category for display
+  const catMap = {};
+  visibleRows.forEach(r => { if(!catMap[r.category]) catMap[r.category]=[]; catMap[r.category].push(r); });
+
+  const catColor = cat =>
+    cat === "Pertinent Negative" ? CAT.layout :
+    cat === "NOT Value"          ? CAT.choice :
+    cat === "Nillable Marker"    ? CAT.advanced : CAT.basic;
+
+  return (
+    <div style={{marginTop:6,paddingTop:6,borderTop:`1px dashed ${V.borderLight}`}}>
+      {Object.entries(catMap).map(([cat, catRows]) => {
+        const c = catColor(cat);
+        return (
+          <div key={cat} style={{marginBottom:4}}>
+            <div style={{fontSize:"10px",fontWeight:700,color:c.dot,textTransform:"uppercase",letterSpacing:".06em",marginBottom:3,fontFamily:V.font}}>{cat}</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+              {catRows.map(r => (
+                <span key={r.rowId} style={{display:"inline-flex",alignItems:"center",gap:3,padding:"2px 8px",borderRadius:"9999px",fontSize:"11px",fontWeight:600,cursor:"pointer",border:`1px solid ${c.dot}44`,background:"#fff",color:c.dot,fontFamily:"'Figtree','Poppins',sans-serif",whiteSpace:"nowrap",transition:"all .12s"}}
+                  onMouseEnter={e=>e.currentTarget.style.background=c.bg} onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
+                  {r.label}
+                  {r.code && <code style={{fontSize:9,opacity:.7,fontFamily:"monospace"}}>{r.code}</code>}
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── NarrativeTextEditor ─────────────────────────────────────────────────────
+// A textarea with a draggable <value> token chip — drop or click to insert at cursor.
+function NarrativeTextEditor({ label, hint, value, onChange }) {
+  const taRef = useRef(null);
+  const TOKEN = "<value>";
+
+  // Insert TOKEN at the textarea's current caret position
+  const insertAtCursor = () => {
+    const ta = taRef.current;
+    if (!ta) { onChange((value||"") + TOKEN); return; }
+    const start = ta.selectionStart ?? (value||"").length;
+    const end   = ta.selectionEnd   ?? start;
+    const next  = (value||"").slice(0, start) + TOKEN + (value||"").slice(end);
+    onChange(next);
+    // Restore caret after React re-renders the value
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.selectionStart = ta.selectionEnd = start + TOKEN.length;
+    });
+  };
+
+  const handleDragStart = e => {
+    e.dataTransfer.setData("text/plain", TOKEN);
+    e.dataTransfer.effectAllowed = "copy";
+  };
+
+  const handleDrop = e => {
+    e.preventDefault();
+    const ta = taRef.current;
+    if (!ta) return;
+    // get drop caret position from the stored selection before drop
+    const start = ta.selectionStart ?? (value||"").length;
+    const next  = (value||"").slice(0, start) + TOKEN + (value||"").slice(start);
+    onChange(next);
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.selectionStart = ta.selectionEnd = start + TOKEN.length;
+    });
+  };
+
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [tokenDragging, setTokenDragging] = useState(false);
+
+  return (
+    <div style={{ marginBottom: V.s4 }}>
+      <VLabel>{label}</VLabel>
+
+      {/* Token chip row */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: V.s2,
+        marginBottom: V.s2, padding: `${V.s2} ${V.s3}`,
+        background: V.bgApp, borderRadius: V.r3,
+        border: `1px solid ${V.borderLight}`,
+      }}>
+        <span style={{ fontSize: V.xs, color: V.textSecondary, fontFamily: V.font, flexShrink: 0 }}>
+          Insert:
+        </span>
+        {/* Draggable <value> chip */}
+        <div
+          draggable
+          onDragStart={e => { handleDragStart(e); setTokenDragging(true); }}
+          onDragEnd={() => setTokenDragging(false)}
+          onClick={insertAtCursor}
+          title="Drag or click to insert <value> at cursor"
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 4,
+            padding: "3px 10px", borderRadius: V.rFull, cursor: "grab",
+            background: tokenDragging ? V.primaryHover : V.primary,
+            color: "#fff", fontSize: V.xs, fontWeight: 700,
+            fontFamily: "monospace", userSelect: "none",
+            boxShadow: tokenDragging ? V.shadow2 : V.shadow1,
+            transform: tokenDragging ? "scale(1.05)" : "scale(1)",
+            transition: "all .15s",
+          }}
+          onMouseEnter={e => { if (!tokenDragging) e.currentTarget.style.background = V.primaryHover; }}
+          onMouseLeave={e => { if (!tokenDragging) e.currentTarget.style.background = V.primary; }}
+        >
+          <span style={{ fontSize: 10, opacity: 0.8 }}>⬡</span>
+          {"<value>"}
+        </div>
+        <span style={{ fontSize: V.xs, color: V.textDisabled, fontFamily: V.font }}>
+          — drag or click to insert at cursor
+        </span>
+      </div>
+
+      {/* Textarea with drop zone */}
+      <div style={{ position: "relative" }}>
+        <textarea
+          ref={taRef}
+          value={value || ""}
+          onChange={e => onChange(e.target.value)}
+          rows={2}
+          placeholder={`e.g. Patient reported <value>.`}
+          onDragOver={e => { e.preventDefault(); setIsDragOver(true); }}
+          onDragLeave={() => setIsDragOver(false)}
+          onDrop={e => { setIsDragOver(false); handleDrop(e); }}
+          style={{
+            ...{width:"100%",padding:"7px 10px",fontSize:V.sm,
+              border: `1.5px solid ${isDragOver ? V.primary : V.border}`,
+              borderRadius: V.r3, background: isDragOver ? V.primaryBg : V.bgSurface,
+              color: V.textPrimary, outline: "none", fontFamily: V.font,
+              resize: "vertical", boxSizing: "border-box",
+              transition: "border-color .15s, background .15s, box-shadow .15s",
+              boxShadow: isDragOver ? `0 0 0 3px ${V.primaryLight}` : "none",
+            }
+          }}
+          onFocus={e => { e.target.style.borderColor = V.borderFocus; e.target.style.boxShadow = `0 0 0 3px ${V.primaryLight}`; }}
+          onBlur={e  => { if (!isDragOver) { e.target.style.borderColor = V.border; e.target.style.boxShadow = "none"; } }}
+        />
+        {/* Drop hint overlay */}
+        {isDragOver && (
+          <div style={{
+            position: "absolute", inset: 0, borderRadius: V.r3,
+            background: "rgba(0,115,234,0.06)", pointerEvents: "none",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <span style={{ fontSize: V.sm, fontWeight: 700, color: V.primary, fontFamily: V.font }}>
+              Drop to insert ⟶
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Rendered preview */}
+      {(value||"").includes("<value>") && (
+        <div style={{
+          marginTop: V.s1, fontSize: V.xs, color: V.textSecondary,
+          fontFamily: V.font, lineHeight: 1.5,
+        }}>
+          Preview:{" "}
+          {(value||"").split("<value>").map((part, i, arr) => (
+            <span key={i}>
+              {part}
+              {i < arr.length - 1 && (
+                <span style={{
+                  display: "inline-flex", alignItems: "center",
+                  padding: "0 5px", borderRadius: V.rFull,
+                  background: V.primaryLight, color: V.primary,
+                  fontSize: V.xs, fontWeight: 700, fontFamily: "monospace",
+                  margin: "0 1px",
+                }}>value</span>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {hint && <div style={{ fontSize: V.xs, color: V.textDisabled, marginTop: V.s1, fontFamily: V.font }}>{hint}</div>}
+    </div>
+  );
+}
+
+// ─── Vibe-style SVG icon atoms ───────────────────────────────────────────────
+function VibeIcon_defaultValue(c) { c = c||"#676879"; return (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <path d="M8 2L13.5 8L8 14L2.5 8L8 2Z" stroke={c} strokeWidth="1.4" strokeLinejoin="round"/>
+    <circle cx="8" cy="8" r="1.8" fill={c}/>
+  </svg>
+);}
+function VibeIcon_memoryField(c) { c = c||"#676879"; return (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <path d="M3 8C3 5.24 5.24 3 8 3C9.66 3 11.13 3.81 12.04 5.06" stroke={c} strokeWidth="1.4" strokeLinecap="round"/>
+    <path d="M13 8C13 10.76 10.76 13 8 13C6.34 13 4.87 12.19 3.96 10.94" stroke={c} strokeWidth="1.4" strokeLinecap="round"/>
+    <path d="M12.5 3.5L12.04 5.06L13.5 5.5" stroke={c} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M3.5 12.5L3.96 10.94L2.5 10.5" stroke={c} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);}
+function VibeIcon_geoLocation(c) { c = c||"#676879"; return (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <path d="M8 1.5C5.79 1.5 4 3.29 4 5.5C4 8.5 8 14.5 8 14.5C8 14.5 12 8.5 12 5.5C12 3.29 10.21 1.5 8 1.5Z" stroke={c} strokeWidth="1.4"/>
+    <circle cx="8" cy="5.5" r="1.5" stroke={c} strokeWidth="1.4"/>
+  </svg>
+);}
+function VibeIcon_hideQuestion(c) { c = c||"#676879"; return (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <path d="M2 4.5H10" stroke={c} strokeWidth="1.4" strokeLinecap="round"/>
+    <path d="M2 8H7" stroke={c} strokeWidth="1.4" strokeLinecap="round"/>
+    <path d="M2 11.5H5" stroke={c} strokeWidth="1.4" strokeLinecap="round"/>
+    <path d="M11 9L14 12M14 9L11 12" stroke={c} strokeWidth="1.4" strokeLinecap="round"/>
+  </svg>
+);}
+function VibeIcon_enabled(c) { c = c||"#676879"; return (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <path d="M8 3V8" stroke={c} strokeWidth="1.5" strokeLinecap="round"/>
+    <path d="M5.17 4.83A5 5 0 1 0 10.83 4.83" stroke={c} strokeWidth="1.4" strokeLinecap="round"/>
+  </svg>
+);}
+function VibeIcon_color(c) { c = c||"#676879"; return (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <circle cx="8" cy="7" r="4.5" stroke={c} strokeWidth="1.4"/>
+    <circle cx="5.5" cy="7" r="1" fill={c}/>
+    <circle cx="8" cy="5" r="1" fill={c}/>
+    <circle cx="10.5" cy="7" r="1" fill={c}/>
+    <path d="M8 11.5V13.5" stroke={c} strokeWidth="1.4" strokeLinecap="round"/>
+    <path d="M6.5 13.5H9.5" stroke={c} strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+);}
+function VibeIcon_hintText(c) { c = c||"#676879"; return (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <path d="M13 2.5H3C2.72 2.5 2.5 2.72 2.5 3V10C2.5 10.28 2.72 10.5 3 10.5H5.5L8 13.5L10.5 10.5H13C13.28 10.5 13.5 10.28 13.5 10V3C13.5 2.72 13.28 2.5 13 2.5Z" stroke={c} strokeWidth="1.4" strokeLinejoin="round"/>
+    <path d="M8 8V8.1" stroke={c} strokeWidth="1.6" strokeLinecap="round"/>
+    <path d="M8 4.5C8 4.5 6.5 5 7 6.5C7.5 7.5 8.5 7.5 8.5 7.5" stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
+  </svg>
+);}
+function VibeIcon_excludeReport(c) { c = c||"#676879"; return (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <path d="M9.5 2H4C3.45 2 3 2.45 3 3V13C3 13.55 3.45 14 4 14H12C12.55 14 13 13.55 13 13V5.5L9.5 2Z" stroke={c} strokeWidth="1.4" strokeLinejoin="round"/>
+    <path d="M9.5 2V5.5H13" stroke={c} strokeWidth="1.4" strokeLinejoin="round"/>
+    <path d="M6 9L10 11M10 9L6 11" stroke={c} strokeWidth="1.3" strokeLinecap="round"/>
+  </svg>
+);}
+function VibeIcon_timeStamp(c) { c = c||"#676879"; return (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <circle cx="8" cy="8" r="5.5" stroke={c} strokeWidth="1.4"/>
+    <path d="M8 5V8L10 10" stroke={c} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);}
+function VibeIcon_required(c) { c = c||"#676879"; return (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <path d="M8 3V13M4 5.27L12 10.73M12 5.27L4 10.73" stroke={c} strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+);}
+function VibeIcon_hidden(c) { c = c||"#676879"; return (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+    <path d="M2 8C2 8 4.5 4 8 4C11.5 4 14 8 14 8C14 8 11.5 12 8 12C4.5 12 2 8 2 8Z" stroke={c} strokeWidth="1.4"/>
+    <circle cx="8" cy="8" r="2" stroke={c} strokeWidth="1.4"/>
+    <path d="M3 3L13 13" stroke={c} strokeWidth="1.4" strokeLinecap="round"/>
+  </svg>
+);}
+const VibeIcons = {
+  defaultValue:  VibeIcon_defaultValue,
+  memoryField:   VibeIcon_memoryField,
+  geoLocation:   VibeIcon_geoLocation,
+  hideQuestion:  VibeIcon_hideQuestion,
+  enabled:       VibeIcon_enabled,
+  color:         VibeIcon_color,
+  hintText:      VibeIcon_hintText,
+  excludeReport: VibeIcon_excludeReport,
+  timeStamp:     VibeIcon_timeStamp,
+  required:      VibeIcon_required,
+  hidden:        VibeIcon_hidden,
+};
+// ─── BehaviourItem: single item in Field Behaviour panel ─────────────────────
+// Must be a top-level component so useState is a valid hook call
+function BehaviourItem({ item, field, b, upd, updB }) {
+  const [open, setOpen] = useState(false);
+
+  const isOn  = item.direct ? !!field.required : !!b[item.key];
+  const val   = item.type === "text" ? (b[item.key] || "") : null;
+  const ic    = VibeIcons[item.icon];
+
+  const toggle = () => {
+    if (item.direct) upd({ required: !field.required });
+    else updB({ [item.key]: !isOn });
+  };
+
+  const activeColor = item.key === "enabled"  ? V.positive :
+                      item.key === "required"  ? V.negative :
+                      item.key === "hidden"    ? V.textSecondary :
+                      V.primary;
+
+  return (
+    <div style={{
+      border:`1px solid ${isOn || (item.type==="text" && val) ? activeColor+"33" : V.borderLight}`,
+      borderRadius:V.r3,
+      background: isOn ? activeColor+"0d" : V.bgSurface,
+      overflow:"hidden",
+      transition:"all .15s",
+    }}>
+      <div style={{ display:"flex", alignItems:"center", gap:V.s2, padding:`${V.s2} ${V.s3}`, cursor:"pointer" }}
+        onClick={item.type==="toggle" ? toggle : ()=>setOpen(o=>!o)}>
+        <div style={{
+          width:28, height:28, borderRadius:V.r2, flexShrink:0,
+          background: isOn || (item.type==="text"&&val) ? activeColor+"18" : V.bgApp,
+          display:"flex", alignItems:"center", justifyContent:"center",
+          transition:"background .15s",
+        }}>
+          {ic && ic(isOn || (item.type==="text"&&val) ? activeColor : V.textDisabled)}
+        </div>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{
+            fontSize:V.sm, fontWeight: isOn || (item.type==="text"&&val) ? 700 : 500,
+            color: isOn || (item.type==="text"&&val) ? activeColor : V.textPrimary,
+            fontFamily:V.font, lineHeight:1.3,
+          }}>{item.label}</div>
+          <div style={{ fontSize:V.xs, color:V.textDisabled, fontFamily:V.font, marginTop:1, lineHeight:1.3 }}>
+            {item.desc}
+          </div>
+        </div>
+        {item.type === "toggle" ? (
+          <div onClick={e=>{e.stopPropagation();toggle();}}
+            style={{ width:32, height:18, borderRadius:V.rFull, background:isOn?activeColor:V.border, position:"relative", cursor:"pointer", transition:"background .2s", flexShrink:0 }}>
+            <div style={{ width:14, height:14, borderRadius:"50%", background:"#fff", position:"absolute", top:2, left:isOn?16:2, transition:"left .2s", boxShadow:V.shadow1 }}/>
+          </div>
+        ) : (
+          <div style={{ fontSize:10, color:V.textDisabled, flexShrink:0, transition:"transform .15s", transform:open?"rotate(90deg)":"none" }}>▶</div>
+        )}
+      </div>
+      {item.type === "text" && open && (
+        <div style={{ padding:`0 ${V.s3} ${V.s3}`, borderTop:`1px solid ${V.borderLight}`, paddingTop:V.s2 }}>
+          <VInput
+            value={val || ""}
+            onChange={e => updB({ [item.key]: e.target.value })}
+            placeholder={item.placeholder}
+            style={{ fontSize:V.sm }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── FieldBehaviourPanel ──────────────────────────────────────────────────────
+function FieldBehaviourPanel({ field, onChange }) {
+  const upd  = p => onChange({ ...field, ...p });
+  const updB = p => onChange({ ...field, behaviour: { ...(field.behaviour||{}), ...p } });
+  const b = field.behaviour || {};
+  const [colorOpen, setColorOpen] = useState(false);
+
+  // Each toggle item: {key, label, desc, icon, inputType?, inputKey?, inputPlaceholder?}
+  const ITEMS = [
+    { key:"enabled",       label:"Enabled",        desc:"Field is visible and active in the form",           icon:"enabled",       type:"toggle" },
+    { key:"required",      label:"Required",       desc:"Respondent must fill this field to submit",         icon:"required",      type:"toggle", direct:true },
+    { key:"hidden",        label:"Hidden",         desc:"Hide from respondent entirely — value not collected",icon:"hidden",        type:"toggle" },
+    { key:"hideQuestion",  label:"Hide Label",     desc:"Show input only, without the field label",          icon:"hideQuestion",  type:"toggle" },
+    { key:"defaultValue",  label:"Default Value",  desc:"Pre-fill with this value — respondent can change it",icon:"defaultValue",  type:"text",   placeholder:"e.g. N/A" },
+    { key:"hintText",      label:"Hint Text",      desc:"Tooltip shown on hover or focus",                   icon:"hintText",      type:"text",   placeholder:"e.g. Enter your full legal name" },
+    { key:"memoryField",   label:"Memory Field",   desc:"Remember last value this user entered",             icon:"memoryField",   type:"toggle" },
+    { key:"geoLocation",   label:"Geo Location",   desc:"Capture device coordinates on submit",              icon:"geoLocation",   type:"toggle" },
+    { key:"timeStamp",     label:"Time Stamp",     desc:"Auto-record exact time this field was filled",      icon:"timeStamp",     type:"toggle" },
+    { key:"excludeReport", label:"Exclude Report", desc:"Omit this field from exports and reports",          icon:"excludeReport", type:"toggle" },
+  ];
+
+  return (
+    <div>
+      <VSecTitle>Field Behaviour</VSecTitle>
+      <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+        {ITEMS.map(item => (
+          <BehaviourItem
+            key={item.key}
+            item={item}
+            field={field}
+            b={b}
+            upd={upd}
+            updB={updB}
+          />
+        ))}
+
+        {/* Color — special picker */}
+        <div style={{
+          border:`1px solid ${b.color ? V.primary+"33" : V.borderLight}`,
+          borderRadius:V.r3, background:b.color ? V.primaryBg : V.bgSurface,
+          overflow:"hidden", transition:"all .15s",
+        }}>
+          <div style={{ display:"flex", alignItems:"center", gap:V.s2, padding:`${V.s2} ${V.s3}`, cursor:"pointer" }}
+            onClick={()=>setColorOpen(o=>!o)}>
+            <div style={{ width:28, height:28, borderRadius:V.r2, flexShrink:0, background:b.color ? b.color+"22" : V.bgApp, display:"flex", alignItems:"center", justifyContent:"center" }}>
+              {VibeIcons.color(b.color || V.textDisabled)}
+            </div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:V.sm, fontWeight:b.color?700:500, color:b.color||V.textPrimary, fontFamily:V.font }}>Color</div>
+              <div style={{ fontSize:V.xs, color:V.textDisabled, fontFamily:V.font, marginTop:1 }}>Accent color override for this field</div>
+            </div>
+            {b.color ? (
+              <div style={{ display:"flex", alignItems:"center", gap:V.s2 }}>
+                <div style={{ width:16, height:16, borderRadius:"50%", background:b.color, border:`2px solid ${V.border}`, flexShrink:0 }}/>
+                <button onClick={e=>{e.stopPropagation();updB({color:""}); setColorOpen(false);}}
+                  style={{ background:"none", border:"none", cursor:"pointer", color:V.textDisabled, fontSize:13, lineHeight:1, padding:0 }}
+                  onMouseEnter={e=>e.target.style.color=V.negative} onMouseLeave={e=>e.target.style.color=V.textDisabled}>×</button>
+              </div>
+            ) : (
+              <div style={{ fontSize:10, color:V.textDisabled, flexShrink:0, transform:colorOpen?"rotate(90deg)":"none", transition:"transform .15s" }}>▶</div>
+            )}
+          </div>
+          {colorOpen && (
+            <div style={{ padding:`0 ${V.s3} ${V.s3}`, borderTop:`1px solid ${V.borderLight}`, paddingTop:V.s2 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:V.s3 }}>
+                <input type="color" value={b.color||"#0073EA"} onChange={e=>updB({color:e.target.value})}
+                  style={{ width:36, height:30, border:`1px solid ${V.border}`, borderRadius:V.r2, cursor:"pointer", padding:2 }}/>
+                <VInput value={b.color||""} onChange={e=>updB({color:e.target.value})} placeholder="#0073EA" style={{ fontSize:V.sm, flex:1 }}/>
+              </div>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:V.s2 }}>
+                {["#0073EA","#D83A52","#258750","#CB6F00","#7C5CBF","#323338","#676879","#00AAFF"].map(c=>(
+                  <div key={c} onClick={()=>updB({color:c})} style={{ width:20, height:20, borderRadius:"50%", background:c, cursor:"pointer", border:b.color===c?`2.5px solid ${V.textPrimary}`:"2px solid transparent", transition:"border .1s" }}/>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── FieldSettingsPanel ───────────────────────────────────────────────────────
+function FieldSettingsPanel({field,onChange,libraries,onUpdateLibraries}){
+  const ft=FIELD_TYPES.find(f=>f.type===field.type);const cat=CAT[ft?.category||"basic"];
+  const upd=p=>onChange({...field,...p});const updS=p=>onChange({...field,settings:{...field.settings,...p}});const updV=p=>onChange({...field,validation:{...field.validation,...p}});
+  return <div style={{overflowY:"auto",flex:1,fontFamily:V.font}}>
+    <div style={{padding:`${V.s4} ${V.s4} ${V.s3}`,borderBottom:`1px solid ${V.borderLight}`,display:"flex",alignItems:"center",gap:V.s3,background:V.bgApp}}>
+      <div style={{width:34,height:34,borderRadius:V.r3,background:cat.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:cat.text,fontWeight:700,flexShrink:0}}>{ft?.icon}</div>
+      <div style={{flex:1}}><div style={{fontWeight:700,fontSize:V.md,color:V.textPrimary}}>{ft?.label}</div><span style={{display:"inline-block",padding:"1px 7px",borderRadius:V.rFull,background:cat.bg,color:cat.text,fontSize:V.xs,fontWeight:600,marginTop:2}}>{ft?.category}</span></div>
+    </div>
+    {!["description","divider"].includes(field.type)&&<div style={{padding:`${V.s3} ${V.s4}`,background:V.bgApp,borderBottom:`1px solid ${V.borderLight}`}}>
+      <div style={{fontSize:V.xs,fontWeight:700,color:V.textDisabled,textTransform:"uppercase",letterSpacing:".08em",marginBottom:V.s2}}>Live Preview</div>
+      {!["divider","description"].includes(field.type)&&<div style={{fontSize:V.sm,fontWeight:600,color:V.textPrimary,marginBottom:V.s1}}>{field.label||ft?.label}{field.required&&<span style={{color:V.negative,marginLeft:2}}>*</span>}</div>}
+      <FieldPreview field={field} compact/>
+      {field.helpText&&<div style={{fontSize:V.xs,color:V.textSecondary,marginTop:V.s1,fontStyle:"italic"}}>{field.helpText}</div>}
+    </div>}
+    <div style={{padding:`${V.s4} ${V.s4}`}}>
+      {field.type==="description"?<VRow label="Content"><VTA value={field.settings.content||""} onChange={e=>updS({content:e.target.value})} rows={5}/></VRow>
+      :field.type==="divider"?<div style={{fontSize:V.sm,color:V.textDisabled,fontStyle:"italic"}}>No settings for divider.</div>
+      :<><VSecTitle>Field Settings</VSecTitle><VRow label="Label"><VInput value={field.label} onChange={e=>upd({label:e.target.value})} placeholder="Field label"/></VRow><VRow label="Placeholder"><VInput value={field.placeholder||""} onChange={e=>upd({placeholder:e.target.value})} placeholder="Placeholder…"/></VRow><VRow label="Help Text"><VInput value={field.helpText||""} onChange={e=>upd({helpText:e.target.value})} placeholder="Helper hint…"/></VRow>{/* Required moved to Field Behaviour panel below */}</>}
+      {["dropdown","multi_select","radio","checkbox"].includes(field.type)&&<><VDivider/><VSecTitle>Options</VSecTitle><OptionsEditor options={field.options||[]} onChange={opts=>upd({options:opts})} fieldType={field.type}/></>}
+      {field.type==="number"&&<><VDivider/><VSecTitle>Number</VSecTitle><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:V.s3}}><VRow label="Min"><VInput type="number" value={field.settings.min||""} onChange={e=>updS({min:e.target.value})} placeholder="—"/></VRow><VRow label="Max"><VInput type="number" value={field.settings.max||""} onChange={e=>updS({max:e.target.value})} placeholder="—"/></VRow><VRow label="Prefix"><VInput value={field.settings.prefix||""} onChange={e=>updS({prefix:e.target.value})} placeholder="$"/></VRow><VRow label="Suffix"><VInput value={field.settings.suffix||""} onChange={e=>updS({suffix:e.target.value})} placeholder="kg"/></VRow></div></>}
+      {field.type==="text"&&<><VDivider/><VSecTitle>Text</VSecTitle><VRow label="Max Length"><VInput type="number" value={field.settings.maxLength||""} onChange={e=>updS({maxLength:e.target.value})} placeholder="Unlimited"/></VRow></>}
+      {field.type==="long_text"&&<><VDivider/><VSecTitle>Text Area</VSecTitle><VRow label="Rows"><VInput type="number" value={field.settings.rows||4} onChange={e=>updS({rows:parseInt(e.target.value)||4})} min="1" max="12"/></VRow></>}
+      {field.type==="rating"&&<><VDivider/><VSecTitle>Rating</VSecTitle><VRow label="Max Stars"><div style={{display:"flex",gap:V.s2}}>{[3,5,7,10].map(n=><button key={n} onClick={()=>updS({max:n})} style={{padding:"5px 12px",border:`1px solid ${field.settings.max===n?V.primary:V.border}`,borderRadius:V.r2,background:field.settings.max===n?V.primaryLight:"#fff",color:field.settings.max===n?V.primary:V.textSecondary,fontSize:V.sm,cursor:"pointer",fontFamily:V.font,fontWeight:field.settings.max===n?700:400}}>{n}★</button>)}</div></VRow></>}
+      {field.type==="scale"&&<><VDivider/><VSecTitle>Scale</VSecTitle><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:V.s3}}><VRow label="Min"><VInput type="number" value={field.settings.min} onChange={e=>updS({min:parseInt(e.target.value)||0})}/></VRow><VRow label="Max"><VInput type="number" value={field.settings.max} onChange={e=>updS({max:parseInt(e.target.value)||10})}/></VRow><VRow label="Min Label"><VInput value={field.settings.minLabel||""} onChange={e=>updS({minLabel:e.target.value})} placeholder="e.g. Not at all"/></VRow><VRow label="Max Label"><VInput value={field.settings.maxLabel||""} onChange={e=>updS({maxLabel:e.target.value})} placeholder="e.g. Extremely"/></VRow></div></>}
+      {field.type==="file"&&<><VDivider/><VSecTitle>File Upload</VSecTitle><VRow label="Max Size (MB)"><VInput type="number" value={field.settings.maxSize} onChange={e=>updS({maxSize:parseInt(e.target.value)||10})}/></VRow><VRow label="Accepted Types" hint=".pdf,.docx or *"><VInput value={field.settings.accept||"*"} onChange={e=>updS({accept:e.target.value})}/></VRow><VToggle checked={field.settings.multiple||false} onChange={v=>updS({multiple:v})} label="Allow multiple files"/></>}
+      {!["description","divider","checkbox","rating","file","signature"].includes(field.type)&&<><VDivider/><VSecTitle>Validation</VSecTitle>{["text","long_text","email","phone","url"].includes(field.type)&&<VRow label="Pattern (Regex)"><VInput value={field.validation?.pattern||""} onChange={e=>updV({pattern:e.target.value})} placeholder="^[A-Z]{2}\d{4}$"/></VRow>}<VRow label="Error Message"><VInput value={field.validation?.message||""} onChange={e=>updV({message:e.target.value})} placeholder="Custom error…"/></VRow></>}
+      {!["description","divider"].includes(field.type)&&<><VDivider/><FieldKeysPanel field={field} libraries={libraries||[]} onChange={onChange} onUpdateLibraries={onUpdateLibraries}/></>}
+
+      {/* ── Narrative Text ── */}
+      {!["description","divider"].includes(field.type)&&<>
+        <VDivider/>
+        <VSecTitle>Narrative Text</VSecTitle>
+        <NarrativeTextEditor
+          label="Value Text"
+          hint="Used when the field has a real answer"
+          value={field.narrative?.valueText||""}
+          onChange={v=>upd({narrative:{...field.narrative,valueText:v}})}
+        />
+        <NarrativeTextEditor
+          label="Not Value Text"
+          hint="Used when NOT value or Pertinent Negative is selected"
+          value={field.narrative?.notValueText||""}
+          onChange={v=>upd({narrative:{...field.narrative,notValueText:v}})}
+        />
+      </>}
+
+{/* Data Attributes + Keys now handled by FieldKeysPanel above */}
+
+      {/* ── Field Behaviour ── */}
+      {!["description","divider"].includes(field.type)&&<>
+        <VDivider/>
+        <FieldBehaviourPanel field={field} onChange={onChange}/>
+      </>}
+    </div>
+  </div>;
+}
+
+// ─── PageSettingsPanel ────────────────────────────────────────────────────────
+function PageSettingsPanel({page,onChange}){
+  return <div style={{overflowY:"auto",flex:1,padding:V.s4,fontFamily:V.font}}>
+    <VSecTitle>Page Details</VSecTitle>
+    <VRow label="Page Title"><VInput value={page.title} onChange={e=>onChange({...page,title:e.target.value})} placeholder="Page title…"/></VRow>
+    <VRow label="Description (optional)"><VTA value={page.description||""} onChange={e=>onChange({...page,description:e.target.value})} rows={3} placeholder="Shown at the top of this page…"/></VRow>
+    <VDivider/>
+    <VSecTitle>Page Export Keys</VSecTitle>
+    <div style={{fontSize:V.xs,color:V.textSecondary,marginBottom:V.s3,lineHeight:1.4}}>Keys here apply to all fields on this page — useful for namespacing multi-page form data in your export.</div>
+{/* Page-level key mapping removed — all keys go through field libraryRows */}
+  </div>;
+}
+
+// ─── FormSettingsPanel ────────────────────────────────────────────────────────
+function FormSettingsPanel({form,onChange}){
+  const s=form.settings;const setS=p=>onChange({...form,settings:{...s,...p}});
+  return <div style={{overflowY:"auto",flex:1,padding:V.s4,fontFamily:V.font}}>
+    <VSecTitle>Form Details</VSecTitle>
+    <VRow label="Form Name"><VInput value={form.name} onChange={e=>onChange({...form,name:e.target.value})} placeholder="Untitled Form"/></VRow>
+    <VRow label="Description"><VTA value={form.description||""} onChange={e=>onChange({...form,description:e.target.value})} rows={3} placeholder="Optional description…"/></VRow>
+    <VDivider/><VSecTitle>Submission</VSecTitle>
+    <VRow label="Submit Button Label"><VInput value={s.submitLabel} onChange={e=>setS({submitLabel:e.target.value})}/></VRow>
+    <VRow label="Success Message"><VTA value={s.successMessage} onChange={e=>setS({successMessage:e.target.value})} rows={3}/></VRow>
+    <VRow label="Redirect URL" hint="Leave blank to show success message"><VInput value={s.redirectUrl||""} onChange={e=>setS({redirectUrl:e.target.value})} placeholder="https://…"/></VRow>
+    <VDivider/><VSecTitle>Options</VSecTitle>
+    <div style={{display:"flex",flexDirection:"column",gap:V.s3}}><VToggle checked={s.showProgress} onChange={v=>setS({showProgress:v})} label="Show progress bar"/><VToggle checked={s.allowDraft} onChange={v=>setS({allowDraft:v})} label="Allow saving drafts"/></div>
+  </div>;
+}
+
+// ─── LayoutPicker ─────────────────────────────────────────────────────────────
+function LayoutPicker({onSelect,onClose}){
+  return <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,zIndex:200,background:V.bgSurface,border:`1px solid ${V.borderLight}`,borderRadius:V.r4,padding:V.s3,boxShadow:V.shadow3,width:320,fontFamily:V.font}}>
+    <div style={{fontSize:V.xs,fontWeight:700,color:V.textDisabled,textTransform:"uppercase",letterSpacing:".08em",marginBottom:V.s2}}>Column Layout — 12-Column Grid</div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
+      {COL_PRESETS.map((p,i)=><button key={i} onClick={()=>{onSelect(p);onClose();}} style={{display:"flex",alignItems:"center",gap:7,padding:"7px 9px",border:`1px solid ${V.borderLight}`,borderRadius:V.r3,background:"#fff",cursor:"pointer",transition:"all .12s",fontFamily:V.font}} onMouseEnter={e=>{e.currentTarget.style.background=V.bgSelected;e.currentTarget.style.borderColor=V.primary;}} onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=V.borderLight;}}>
+        <div style={{display:"flex",gap:2,flexShrink:0}}>
+          {p.cols.map((span,ci)=><div key={ci} style={{width:Math.round((span/GRID_COLS)*52),height:17,background:V.primaryLight,border:`1.5px solid ${V.primary}44`,borderRadius:3,display:"flex",alignItems:"center",justifyContent:"center",fontSize:7,color:V.primary,fontWeight:700,overflow:"hidden"}}>{span}</div>)}
+        </div>
+        <div><div style={{fontSize:V.xs,fontWeight:600,color:V.textPrimary}}>{p.label}</div><div style={{fontSize:9,color:V.textDisabled}}>{p.hint}</div></div>
+      </button>)}
+    </div>
+  </div>;
+}
+
+// ─── ResizableRow: 12-column drag-to-resize cells ────────────────────────────
+function ResizableRow({ row, rowId, dropTarget, setDropTarget, rowDragId,
+  onCellDrop, onUpdateCols, onSelectField, selectedFieldId, dragState,
+  addFieldToCell, delFieldFromCell, removeColumn, onColumnDragStart }) {
+
+  const rowRef      = useRef(null);
+  const draggingRef = useRef(null); // { handleIdx, startX, startCols[] }
+  const [liveCols, setLiveCols] = useState(row.preset.cols);
+  const [activeHandle, setActiveHandle] = useState(null); // index of handle being dragged
+
+  const GUTTER = 12; // px gap between cells (matches V.s3)
+  const MIN_SPAN = 1; // minimum column span
+
+  const startResize = (e, handleIdx) => {
+    // Only start resize from the grip element itself, not from child drag handles
+    if (e.target.dataset.resizegrip !== "true") return;
+    e.preventDefault();
+    e.stopPropagation();
+    const cols = [...liveCols];
+    draggingRef.current = { handleIdx, startX: e.clientX, startCols: [...cols] };
+    setActiveHandle(handleIdx);
+
+    const onMove = (ev) => {
+      const { handleIdx: hi, startX, startCols } = draggingRef.current;
+      const rowEl = rowRef.current;
+      if (!rowEl) return;
+
+      // Total row width excluding gutters
+      const totalGutters = GUTTER * (startCols.length - 1);
+      const rowW = rowEl.offsetWidth - totalGutters;
+
+      // Delta in pixels → delta in 12-col units
+      const dx = ev.clientX - startX;
+      const pxPerUnit = rowW / GRID_COLS;
+      const rawDelta = dx / pxPerUnit;
+
+      // Snap delta to nearest integer
+      const snappedDelta = Math.round(rawDelta);
+      if (snappedDelta === 0) return;
+
+      const next = [...startCols];
+      const leftCol  = hi;       // cell to the left of handle
+      const rightCol = hi + 1;   // cell to the right of handle
+
+      const newLeft  = startCols[leftCol]  + snappedDelta;
+      const newRight = startCols[rightCol] - snappedDelta;
+
+      // Clamp — neither side goes below MIN_SPAN, neither exceeds total minus MIN_SPAN*others
+      const maxLeft  = GRID_COLS - (startCols.length - 1) * MIN_SPAN - MIN_SPAN;
+      const maxRight = GRID_COLS - (startCols.length - 1) * MIN_SPAN - MIN_SPAN;
+
+      if (newLeft  < MIN_SPAN || newLeft  > maxLeft)  return;
+      if (newRight < MIN_SPAN || newRight > maxRight) return;
+
+      next[leftCol]  = newLeft;
+      next[rightCol] = newRight;
+      setLiveCols(next);
+    };
+
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      setActiveHandle(null);
+      // Commit final cols to parent
+      const finalCols = draggingRef.current
+        ? [...liveCols]   // will be stale; use ref below
+        : row.preset.cols;
+      // Use a ref to get the latest liveCols
+      onUpdateCols(finalColsRef.current);
+      draggingRef.current = null;
+    };
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
+
+  // Keep a ref to latest liveCols so onUp can read it without closure issues
+  const finalColsRef = useRef(liveCols);
+  finalColsRef.current = liveCols;
+
+  // Sync when row.preset changes from outside (e.g. layout picker)
+  const presetKey = row.preset.cols.join(",");
+  const prevPresetKey = useRef(presetKey);
+  if (prevPresetKey.current !== presetKey) {
+    prevPresetKey.current = presetKey;
+    // Schedule sync after render completes — avoids render-time state update
+    Promise.resolve().then(() => setLiveCols(row.preset.cols));
+  }
+
+  const totalSpans = liveCols.reduce((a,b)=>a+b, 0);
+
+  return (
+    <div ref={rowRef} style={{ display:"flex", alignItems:"stretch", gap:0, userSelect:activeHandle!==null?"none":"auto" }}>
+      {liveCols.map((span, ci) => {
+        const cell = row.cells[ci];
+        if (!cell) return null;
+        const isOver2 = dropTarget?.rowId===rowId && dropTarget?.cellId===cell.id;
+        const flexPct = (span / totalSpans * 100).toFixed(4) + "%";
+        const isLastCell = ci === liveCols.length - 1;
+        const isHandleActive = activeHandle === ci;
+
+        return (
+          <div key={cell.id} style={{ flex:`0 0 ${flexPct}`, maxWidth:flexPct, minWidth:0, display:"flex", position:"relative" }}>
+            {/* Cell content */}
+            <div style={{ flex:1, minWidth:0 }}
+              onDragOver={e=>{e.preventDefault();if(!rowDragId)setDropTarget({rowId,cellId:cell.id});}}
+              onDragLeave={()=>setDropTarget(null)}
+              onDrop={e=>{if(rowDragId)return;onCellDrop(e,rowId,cell.id);}}>
+              <div style={{
+                background:isOver2?V.bgSelected:V.bgSurface,
+                border:`2px ${isOver2?`dashed ${V.primary}`:`solid ${V.borderLight}`}`,
+                borderRadius:V.r4, padding:V.s3, minHeight:80,
+                transition:"background .12s, border-color .12s",
+                boxShadow:isOver2?`0 0 0 3px ${V.primaryLight}`:V.shadow1,
+                marginRight: isLastCell ? 0 : GUTTER/2,
+                marginLeft:  ci === 0   ? 0 : GUTTER/2,
+              }}>
+                {/* Column header: drag handle + span badge + remove */}
+                <div style={{ display:"flex", alignItems:"center", gap:V.s1, marginBottom:V.s2 }}>
+                  {/* Drag-to-move column handle */}
+                  <div
+                    title="Drag column to another section or page"
+                    style={{
+                      cursor:"grab", color:V.textDisabled, fontSize:13,
+                      padding:"3px 5px", borderRadius:V.r2, lineHeight:1,
+                      flexShrink:0, display:"flex", alignItems:"center",
+                      userSelect:"none",
+                    }}
+                    onMouseEnter={e=>{e.currentTarget.style.background=V.bgHover;e.currentTarget.style.color=V.primary;}}
+                    onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color=V.textDisabled;}}
+                    onMouseDown={e=>{
+                      e.stopPropagation();
+                      e.preventDefault();
+                      const payload = {cellId:cell.id, rowId, fields:cell.fields, span};
+                      if (onColumnDragStart) onColumnDragStart(payload);
+                      // Ghost element follows cursor
+                      const ghost = document.createElement("div");
+                      ghost.id = "__col_drag_ghost__";
+                      ghost.style.cssText = `position:fixed;z-index:9999;pointer-events:none;background:${V.primary};color:#fff;padding:6px 14px;border-radius:6px;font-size:12px;font-weight:700;font-family:${V.font};box-shadow:0 4px 16px rgba(0,0,0,0.25);opacity:0.92;transform:translate(-50%,-50%);white-space:nowrap;`;
+                      ghost.textContent = "▣ " + (cell.fields.length||0) + " field" + (cell.fields.length!==1?"s":"") + " — drop on section";
+                      document.body.appendChild(ghost);
+                      const move = ev => {
+                        ghost.style.left = ev.clientX + "px";
+                        ghost.style.top  = ev.clientY + "px";
+                      };
+                      move(e);
+                      const up = ev => {
+                        document.removeEventListener("mousemove", move);
+                        document.removeEventListener("mouseup", up);
+                        document.body.removeChild(ghost);
+                        // Find what element is under cursor
+                        const els = document.elementsFromPoint(ev.clientX, ev.clientY);
+                        let dropped = false;
+                        for (const el of els) {
+                          const pgId  = el.dataset.dropPageId;
+                          const secId = el.dataset.dropSecId;
+                          if (pgId && secId && !dropped) {
+                            dropped = true;
+                            if (dragState.onColumnDropToSection) {
+                              dragState.onColumnDropToSection(pgId, secId);
+                            }
+                          }
+                        }
+                        if (dragState.setColumnDrag) dragState.setColumnDrag(null);
+                      };
+                      document.addEventListener("mousemove", move);
+                      document.addEventListener("mouseup", up);
+                    }}
+                  >⠿</div>
+                  {/* Span badge */}
+                  <span style={{
+                    fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:V.rFull,
+                    background: isHandleActive ? V.primaryLight : V.bgApp,
+                    border:`1px solid ${isHandleActive ? V.primary : V.borderLight}`,
+                    color: isHandleActive ? V.primary : V.textDisabled,
+                    fontFamily:V.font, transition:"all .12s", flex:1,
+                  }}>
+                    {spanLabel(span)} · {span}/{GRID_COLS}
+                  </span>
+                  {/* Remove column (only when >1 cell) */}
+                  {row.cells.length > 1 && (
+                    <button
+                      onClick={e=>{ e.stopPropagation(); removeColumn && removeColumn(rowId, cell.id); }}
+                      title="Remove this column (fields stay)"
+                      style={{ background:"none", border:"none", cursor:"pointer", color:V.textDisabled, fontSize:13, padding:"1px 3px", lineHeight:1, borderRadius:V.r2, flexShrink:0, display:"flex",alignItems:"center" }}
+                      onMouseEnter={e=>{e.currentTarget.style.background=V.negativeBg;e.currentTarget.style.color=V.negative;}}
+                      onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color=V.textDisabled;}}
+                    >×</button>
+                  )}
+                </div>
+
+                {/* Empty drop hint */}
+                {cell.fields.length===0 && (
+                  <div style={{ border:`1px dashed ${V.border}`, borderRadius:V.r2, padding:`${V.s3} ${V.s2}`, textAlign:"center", color:V.textDisabled, fontSize:V.sm, fontFamily:V.font, background:V.bgApp }}>
+                    Drop field here
+                  </div>
+                )}
+
+                {/* Fields */}
+                {cell.fields.map(field => {
+                  const ft=FIELD_TYPES.find(f=>f.type===field.type);
+                  const cat=CAT[ft?.category||"basic"];
+                  const isSel=selectedFieldId===field.id;
+                  const isLayout=["description","divider"].includes(field.type);
+                  const allKeys=(field.libraryRows||[]).map(r=>r.exportKey).filter(Boolean);
+                  return (
+                    <div key={field.id}
+                      onClick={e=>{e.stopPropagation();onSelectField(field.id);}}
+                      style={{ border:`1.5px solid ${isSel?V.primary:V.borderLight}`, borderRadius:V.r3, padding:`${V.s2} ${V.s3}`, background:isSel?V.bgSelected:V.bgSurface, cursor:"pointer", marginBottom:V.s2, userSelect:"none", transition:"all .12s", boxShadow:isSel?`0 0 0 3px ${V.primaryLight}`:V.shadow1 }}
+                      onMouseEnter={e=>{if(!isSel){e.currentTarget.style.borderColor=V.border;e.currentTarget.style.boxShadow=V.shadow2;}}}
+                      onMouseLeave={e=>{if(!isSel){e.currentTarget.style.borderColor=V.borderLight;e.currentTarget.style.boxShadow=V.shadow1;}}}>
+                      <div style={{ display:"flex", alignItems:"center", gap:V.s2, marginBottom:isLayout?0:V.s2 }}>
+                        <span
+                          title="Drag to move this field to another section or page"
+                          style={{ color:V.border, fontSize:13, cursor:"grab", flexShrink:0, padding:"1px 3px", borderRadius:V.r2, lineHeight:1, userSelect:"none" }}
+                          onMouseEnter={e=>{e.currentTarget.style.color=V.primary;e.currentTarget.style.background=V.bgHover;}}
+                          onMouseLeave={e=>{e.currentTarget.style.color=V.border;e.currentTarget.style.background="none";}}
+                          onMouseDown={e=>{
+                            e.stopPropagation(); e.preventDefault();
+                            const payload = {field, srcRowId:rowId, srcCellId:cell.id};
+                            if (dragState.setFieldDrag) dragState.setFieldDrag(payload);
+                            // Also set same-section fieldId so within-section drop still works
+                            dragState.setFieldId(field.id);
+                            dragState.setPaletteType(null);
+                            // Ghost
+                            const ghost = document.createElement("div");
+                            ghost.id = "__field_drag_ghost__";
+                            ghost.style.cssText = `position:fixed;z-index:9999;pointer-events:none;background:${V.primary};color:#fff;padding:5px 12px;border-radius:6px;font-size:12px;font-weight:700;font-family:${V.font};box-shadow:0 4px 16px rgba(0,0,0,0.25);opacity:0.92;transform:translate(-50%,-50%);white-space:nowrap;`;
+                            ghost.textContent = "▣ " + (field.label || "Field") + " — drop on section";
+                            document.body.appendChild(ghost);
+                            const move = ev => { ghost.style.left=ev.clientX+"px"; ghost.style.top=ev.clientY+"px"; };
+                            move(e);
+                            const up = ev => {
+                              document.removeEventListener("mousemove", move);
+                              document.removeEventListener("mouseup", up);
+                              if(document.getElementById("__field_drag_ghost__")) document.body.removeChild(ghost);
+                              // Hit-test for sidebar section drop
+                              const els = document.elementsFromPoint(ev.clientX, ev.clientY);
+                              let dropped = false;
+                              for (const el of els) {
+                                const pgId  = el.dataset.dropPageId;
+                                const secId = el.dataset.dropSecId;
+                                if (pgId && secId && !dropped) {
+                                  dropped = true;
+                                  if (dragState.onFieldDropToSection) dragState.onFieldDropToSection(pgId, secId);
+                                }
+                              }
+                              if (dragState.setFieldDrag) dragState.setFieldDrag(null);
+                              dragState.setFieldId(null);
+                            };
+                            document.addEventListener("mousemove", move);
+                            document.addEventListener("mouseup", up);
+                          }}
+                        >⠿</span>
+                        <div style={{ width:20, height:20, borderRadius:V.r2, background:cat.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:9, fontWeight:700, color:cat.text, flexShrink:0 }}>{ft?.icon}</div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:V.sm, fontWeight:600, color:V.textPrimary, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontFamily:V.font }}>
+                            {field.label}{field.required&&<span style={{ color:V.negative, marginLeft:2, fontSize:10 }}>*</span>}
+                          </div>
+                          {allKeys.length>0 && (
+                            <div style={{ display:"flex", gap:2, flexWrap:"wrap", marginTop:2 }}>
+                              {allKeys.slice(0,4).map((k,ki)=>(
+                                <span key={ki} style={{ fontSize:9, padding:"0 5px", background:V.primaryLight, border:`1px solid ${V.primary}30`, borderRadius:V.rFull, color:V.primary, fontFamily:"monospace", maxWidth:80, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", display:"inline-block" }}>{k}</span>
+                              ))}
+                              {allKeys.length>4 && <span style={{ fontSize:9, color:V.textDisabled, fontFamily:V.font }}>+{allKeys.length-4}</span>}
+                            </div>
+                          )}
+                        </div>
+                        <button onClick={e=>{e.stopPropagation();delFieldFromCell(rowId,cell.id,field.id);}}
+                          style={{ background:"none", border:"none", cursor:"pointer", color:V.textDisabled, fontSize:15, padding:"0 2px", lineHeight:1, flexShrink:0 }}
+                          onMouseEnter={e=>e.target.style.color=V.negative}
+                          onMouseLeave={e=>e.target.style.color=V.textDisabled}>×</button>
+                      </div>
+                      {!isLayout && <div style={{ pointerEvents:"none" }}><FieldPreview field={field} compact/></div>}
+                    </div>
+                  );
+                })}
+
+                {/* Add field button */}
+                <button onClick={()=>addFieldToCell(rowId,cell.id,"text")}
+                  style={{ width:"100%", border:`1px dashed ${V.border}`, borderRadius:V.r2, padding:"5px", background:"none", color:V.textDisabled, fontSize:V.sm, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:4, fontFamily:V.font, transition:"all .12s", marginTop:cell.fields.length>0?V.s1:0 }}
+                  onMouseEnter={e=>{e.currentTarget.style.borderColor=V.primary;e.currentTarget.style.color=V.primary;e.currentTarget.style.background=V.primaryLight;}}
+                  onMouseLeave={e=>{e.currentTarget.style.borderColor=V.border;e.currentTarget.style.color=V.textDisabled;e.currentTarget.style.background="none";}}>
+                  + Add field
+                </button>
+              </div>
+            </div>
+
+            {/* Resize handle — between cells, not after last */}
+            {!isLastCell && (
+              <div
+                onMouseDown={e => startResize(e, ci)}
+                title={`Drag to resize columns (snaps to 1/12 grid)`}
+                style={{
+                  position:"absolute", right:0,
+                  top:0, bottom:0,
+                  width:GUTTER,
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  cursor:"col-resize",
+                  zIndex:10,
+                  transform:"translateX(50%)",
+                }}
+              >
+                {/* Visual grip */}
+                <div data-resizegrip="true" style={{
+                  width: activeHandle===ci ? 6 : 4,
+                  height: activeHandle===ci ? 40 : 28,
+                  borderRadius:V.rFull,
+                  background: activeHandle===ci ? V.primary : V.border,
+                  opacity: activeHandle===ci ? 1 : 0.5,
+                  transition:"all .12s",
+                  display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:2,
+                  boxShadow: activeHandle===ci ? V.shadow2 : "none",
+                  pointerEvents:"auto",
+                }}>
+                  {/* Grip dots */}
+                  {[0,1,2].map(i => (
+                    <div key={i} data-resizegrip="true" style={{ width:2, height:2, borderRadius:"50%", background:"#fff", opacity:.7 }}/>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── GridCanvas (with row drag-and-drop) ──────────────────────────────────────
+function GridCanvas({rows,onUpdateRows,onSelectField,selectedFieldId,dragState,sectionSettings}){
+  const [showLayoutFor,setShowLayoutFor]=useState(null);
+  const [dropTarget,setDropTarget]=useState(null);
+  const [rowDragId,setRowDragId]=useState(null);
+  const [rowDragOverIdx,setRowDragOverIdx]=useState(null);
+
+  const handleRowDragStart=(e,rowId)=>{setRowDragId(rowId);e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain",rowId);e.stopPropagation();};
+  const handleRowDragOver=(e,idx)=>{e.preventDefault();e.stopPropagation();if(rowDragId)setRowDragOverIdx(idx);};
+  const handleRowDrop=(e,targetIdx)=>{
+    e.preventDefault();e.stopPropagation();
+    if(!rowDragId)return;
+    const fromIdx=rows.findIndex(r=>r.id===rowDragId);
+    if(fromIdx===-1||fromIdx===targetIdx){setRowDragId(null);setRowDragOverIdx(null);return;}
+    const next=rows.slice();const[moved]=next.splice(fromIdx,1);next.splice(targetIdx,0,moved);
+    onUpdateRows(next);setRowDragId(null);setRowDragOverIdx(null);
+  };
+  const handleRowDragEnd=()=>{setRowDragId(null);setRowDragOverIdx(null);};
+
+  const addRow=()=>onUpdateRows([...rows,makeRow()]);
+  const deleteRow=id=>onUpdateRows(rows.filter(r=>r.id!==id));
+  const changeLayout=(id,preset)=>onUpdateRows(rows.map(r=>r.id!==id?r:{...r,preset,cells:preset.cols.map((_,i)=>r.cells[i]||makeCell())}));
+
+  // Add Column: redistribute 12 grid units evenly across n+1 columns
+  const addColumn = (rowId) => {
+    onUpdateRows(rows.map(r => {
+      if (r.id !== rowId) return r;
+      const n = r.cells.length + 1;
+      if (n > 6) return r; // cap at 6 columns
+      const base = Math.floor(GRID_COLS / n);
+      const rem  = GRID_COLS - base * n;
+      const newCols = Array.from({length: n}, (_,i) => i === 0 ? base + rem : base);
+      const newCells = [...r.cells, makeCell()];
+      return { ...r, preset: {...r.preset, cols:newCols, label:"Custom"}, cells: newCells };
+    }));
+  };
+
+  // Remove Column: redistribute remaining columns to fill 12
+  const removeColumn = (rowId, cellId) => {
+    onUpdateRows(rows.map(r => {
+      if (r.id !== rowId) return r;
+      if (r.cells.length <= 1) return r; // keep at least 1
+      const idx = r.cells.findIndex(c => c.id === cellId);
+      if (idx === -1) return r;
+      const newCells = r.cells.filter(c => c.id !== cellId);
+      const n = newCells.length;
+      const base = Math.floor(GRID_COLS / n);
+      const rem  = GRID_COLS - base * n;
+      const newCols = Array.from({length: n}, (_,i) => i === 0 ? base + rem : base);
+      return { ...r, preset: {...r.preset, cols:newCols, label:"Custom"}, cells: newCells };
+    }));
+  };
+  const addFieldToCell=(rowId,cellId,type)=>{const f=makeField(type);onUpdateRows(rows.map(r=>r.id!==rowId?r:{...r,cells:r.cells.map(c=>c.id!==cellId?c:{...c,fields:[...c.fields,f]})}));onSelectField(f.id);return f;};
+  const delFieldFromCell=(rowId,cellId,fieldId)=>onUpdateRows(rows.map(r=>r.id!==rowId?r:{...r,cells:r.cells.map(c=>c.id!==cellId?c:{...c,fields:c.fields.filter(f=>f.id!==fieldId)})}));
+  const handleCellDrop=(e,rowId,cellId)=>{
+    e.preventDefault();e.stopPropagation();setDropTarget(null);
+    if(dragState.paletteType){addFieldToCell(rowId,cellId,dragState.paletteType);dragState.setPaletteType(null);}
+    else if(dragState.fieldId){let m=null;const n=rows.map(r=>({...r,cells:r.cells.map(c=>{const i=c.fields.findIndex(f=>f.id===dragState.fieldId);if(i===-1)return c;m=c.fields[i];return{...c,fields:c.fields.filter((_,j)=>j!==i)};})}));if(m)onUpdateRows(n.map(r=>r.id!==rowId?r:{...r,cells:r.cells.map(c=>c.id!==cellId?c:{...c,fields:[...c.fields,m]})}));dragState.setFieldId(null);}
+  };
+
+  return <div style={{flex:1,overflowY:"auto",padding:`${V.s4} ${V.s5}`,background:V.bgApp}}>
+    {rows.map((row,rowIdx)=>{
+      const isDragging=rowDragId===row.id;const isRowOver=rowDragOverIdx===rowIdx&&rowDragId!==row.id;
+      return <div key={row.id} onDragOver={e=>handleRowDragOver(e,rowIdx)} onDrop={e=>handleRowDrop(e,rowIdx)} style={{marginBottom:V.s3,opacity:isDragging?0.4:1,transition:"opacity .15s"}}>
+        {isRowOver&&<div style={{height:3,background:V.primary,borderRadius:V.rFull,marginBottom:V.s2,boxShadow:`0 0 0 3px ${V.primaryLight}`}}/>}
+        <div style={{display:"flex",alignItems:"center",gap:V.s2,marginBottom:V.s2}}>
+          <div style={{display:"flex",alignItems:"center",gap:2,background:V.bgSurface,border:`1px solid ${V.borderLight}`,borderRadius:V.r3,padding:"2px 4px",boxShadow:V.shadow1}}>
+            <div draggable onDragStart={e=>handleRowDragStart(e,row.id)} onDragEnd={handleRowDragEnd} title="Drag to reorder row" style={{padding:"3px 7px",cursor:"grab",color:V.textDisabled,fontSize:13,borderRadius:V.r2,display:"flex",alignItems:"center",userSelect:"none"}} onMouseEnter={e=>e.currentTarget.style.background=V.bgHover} onMouseLeave={e=>e.currentTarget.style.background="none"}>⠿</div>
+            <div style={{width:1,height:14,background:V.borderLight,margin:"0 2px"}}/>
+            <div style={{position:"relative"}}>
+              <button onClick={()=>setShowLayoutFor(showLayoutFor===row.id?null:row.id)} style={{display:"flex",alignItems:"center",gap:V.s1,background:"none",border:"none",cursor:"pointer",color:V.textSecondary,fontSize:V.sm,padding:"3px 7px",borderRadius:V.r2,fontFamily:V.font,whiteSpace:"nowrap"}} onMouseEnter={e=>e.currentTarget.style.background=V.bgHover} onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                <svg width="13" height="12" viewBox="0 0 13 12"><rect x="0.5" y="1" width="2.5" height="10" rx="1" fill={V.textDisabled}/><rect x="5" y="1" width="2.5" height="10" rx="1" fill={V.textDisabled}/><rect x="9.5" y="1" width="2.5" height="10" rx="1" fill={V.textDisabled}/></svg>
+                <span style={{fontSize:V.xs}}>{row.preset.label}</span><span style={{fontSize:9,color:V.textDisabled}}>▾</span>
+              </button>
+              {showLayoutFor===row.id&&<LayoutPicker onSelect={p=>changeLayout(row.id,p)} onClose={()=>setShowLayoutFor(null)}/>}
+            </div>
+          </div>
+          <div style={{flex:1}}/>
+          {/* Add Column button — hidden when row already has 6 cols */}
+          {row.cells.length < 6 && (
+            <button onClick={()=>addColumn(row.id)}
+              title={`Add column (${row.cells.length + 1} of 6)`}
+              style={{background:"none",border:`1px solid ${V.borderLight}`,cursor:"pointer",color:V.textDisabled,fontSize:V.sm,padding:"3px 10px",borderRadius:V.r3,fontFamily:V.font,transition:"all .12s",display:"flex",alignItems:"center",gap:4}}
+              onMouseEnter={e=>{e.currentTarget.style.background=V.primaryLight;e.currentTarget.style.borderColor=V.primary;e.currentTarget.style.color=V.primary;}}
+              onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.borderColor=V.borderLight;e.currentTarget.style.color=V.textDisabled;}}>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <rect x="1" y="1" width="3" height="10" rx="1" fill="currentColor" opacity=".5"/>
+                <rect x="8" y="1" width="3" height="10" rx="1" fill="currentColor" opacity=".5"/>
+                <path d="M5.5 4.5v3M4 6h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+              </svg>
+              + Column
+            </button>
+          )}
+          <button onClick={()=>deleteRow(row.id)} style={{background:"none",border:`1px solid ${V.borderLight}`,cursor:"pointer",color:V.textDisabled,fontSize:V.sm,padding:"3px 10px",borderRadius:V.r3,fontFamily:V.font,transition:"all .12s"}} onMouseEnter={e=>{e.currentTarget.style.background=V.negativeBg;e.currentTarget.style.borderColor=V.negative;e.currentTarget.style.color=V.negative;}} onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.borderColor=V.borderLight;e.currentTarget.style.color=V.textDisabled;}}>× Row</button>
+        </div>
+        {/* 12-col grid row — ResizableRow handles column drag */}
+        <ResizableRow
+          row={row} rowId={row.id}
+          dropTarget={dropTarget} setDropTarget={setDropTarget}
+          rowDragId={rowDragId}
+          onCellDrop={handleCellDrop}
+          onUpdateCols={newCols=>changeLayout(row.id,{...row.preset,cols:newCols,label:"Custom"})}
+          onSelectField={onSelectField} selectedFieldId={selectedFieldId}
+          dragState={dragState}
+          addFieldToCell={addFieldToCell} delFieldFromCell={delFieldFromCell}
+          removeColumn={removeColumn}
+          onColumnDragStart={dragState.onColumnDragStart}
+        />
+      </div>;
+    })}
+    {rowDragId&&<div onDragOver={e=>{e.preventDefault();setRowDragOverIdx(rows.length);}} onDrop={e=>handleRowDrop(e,rows.length)} style={{height:40,border:`2px dashed ${rowDragOverIdx===rows.length?V.primary:V.borderLight}`,borderRadius:V.r4,display:"flex",alignItems:"center",justifyContent:"center",color:rowDragOverIdx===rows.length?V.primary:V.textDisabled,fontSize:V.sm,fontFamily:V.font,marginBottom:V.s3,transition:"all .12s",background:rowDragOverIdx===rows.length?V.primaryBg:"transparent"}}>Drop here to move to end</div>}
+    <button onClick={addRow} style={{width:"100%",border:`2px dashed ${V.border}`,borderRadius:V.r4,padding:"14px",background:"none",color:V.textSecondary,fontSize:V.md,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:V.s2,fontFamily:V.font,fontWeight:500,transition:"all .15s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=V.primary;e.currentTarget.style.color=V.primary;e.currentTarget.style.background=V.primaryLight;}} onMouseLeave={e=>{e.currentTarget.style.borderColor=V.border;e.currentTarget.style.color=V.textSecondary;e.currentTarget.style.background="none;"}}><span style={{fontSize:18,fontWeight:300}}>+</span> Add Row</button>
+    {sectionSettings?.repeatable&&<div style={{marginTop:V.s4,padding:`${V.s3} ${V.s4}`,background:V.warningBg,border:`1px dashed ${V.warning}66`,borderRadius:V.r4,display:"flex",alignItems:"center",gap:V.s3}}><span style={{fontSize:18,flexShrink:0}}>🔁</span><div style={{flex:1}}><div style={{fontSize:V.sm,fontWeight:600,color:V.warning,fontFamily:V.font}}>Repeatable Section</div><div style={{fontSize:V.xs,color:V.textSecondary,fontFamily:V.font,marginTop:2}}>Respondents will see a <strong>"{sectionSettings.repeatLabel||"+ Add Another"}"</strong> button · max {sectionSettings.maxRepeats||10} copies</div></div><div style={{padding:"4px 10px",background:V.warning,color:"#fff",borderRadius:V.rFull,fontSize:V.xs,fontWeight:700,fontFamily:V.font,flexShrink:0}}>🔁 On</div></div>}
+  </div>;
+}
+
+// ─── Sidebar ──────────────────────────────────────────────────────────────────
+function Sidebar({form,activeSectionId,onSelectSection,onAddPage,onDeletePage,onRenamePage,onAddSection,onDeleteSection,onRenameSection,onOpenSecSettings,columnDrag,onColumnDropToSection,fieldDrag,onFieldDropToSection}){
+  const [editId,setEditId]=useState(null);const[editVal,setEditVal]=useState("");
+  const startEdit=(id,val,e)=>{e.stopPropagation();setEditId(id);setEditVal(val);};
+  const commitPage=id=>{onRenamePage(id,editVal);setEditId(null);};
+  const commitSec=(pg,id)=>{onRenameSection(pg,id,editVal);setEditId(null);};
+  const activePage=form.pages.find(p=>p.sections.some(s=>s.id===activeSectionId))||form.pages[0];
+  const rowS=active=>({display:"flex",alignItems:"center",cursor:"pointer",background:active?V.sidebarActive:"transparent",borderBottom:`1px solid ${V.sidebarBorder}`,transition:"background .1s"});
+  return <div style={{width:204,background:V.sidebarBg,display:"flex",flexDirection:"column",overflow:"hidden",flexShrink:0,userSelect:"none",fontFamily:V.font}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:`${V.s3} ${V.s3}`,background:"rgba(0,0,0,0.2)"}}>
+      <span style={{fontSize:V.sm,fontWeight:700,color:V.sidebarText}}>◀ Pages</span>
+      <button onClick={onAddPage} style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.2)",color:V.sidebarText,width:22,height:22,borderRadius:V.r2,cursor:"pointer",fontSize:15,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.22)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.1)"}>+</button>
+    </div>
+    {/* Column / field drag active banner */}
+    {(columnDrag || fieldDrag) && (
+      <div style={{
+        background:"rgba(0,115,234,0.2)", padding:`${V.s2} ${V.s3}`,
+        borderBottom:"1px solid rgba(0,115,234,0.35)",
+        display:"flex", alignItems:"center", gap:V.s2, flexShrink:0,
+      }}>
+        <span style={{fontSize:10, color:"#7ec8ff"}}>⠿</span>
+        <span style={{fontSize:V.xs, color:"#7ec8ff", fontFamily:V.font, fontWeight:600}}>
+          {fieldDrag ? `Moving "${fieldDrag.field?.label||"Field"}"` : "Moving column"} — drop on section
+        </span>
+      </div>
+    )}
+    <div style={{overflowY:"auto",flex:1}}>
+      {form.pages.map(page=>{
+        const isTp=page.sections.some(s=>s.id===activeSectionId);
+        const pkCnt=0; // page-level keys removed in unified library system
+        return <div key={page.id}>
+          <div onClick={()=>onSelectSection(page.id,page.sections[0].id)}
+            data-drop-page-id={page.id}
+            data-drop-sec-id={page.sections[0]?.id}
+            style={{...rowS(isTp),padding:`${V.s2} ${V.s3} ${V.s2} ${V.s2}`,borderBottom:"1px solid rgba(255,255,255,0.1)",outline:"none",
+              background:(columnDrag||fieldDrag)?isTp?"rgba(0,115,234,0.3)":"rgba(0,115,234,0.1)":isTp?V.sidebarActive:"transparent",
+              border:(columnDrag||fieldDrag)?"1px solid rgba(0,115,234,0.5)":undefined,
+              transition:"background .12s",
+            }}
+            onMouseEnter={e=>{if(columnDrag||fieldDrag){e.currentTarget.style.background="rgba(0,115,234,0.35)";}else if(!isTp){e.currentTarget.style.background=V.sidebarHover;}}}
+            onMouseLeave={e=>{if(columnDrag||fieldDrag){e.currentTarget.style.background=isTp?"rgba(0,115,234,0.3)":"rgba(0,115,234,0.1)";}else if(!isTp){e.currentTarget.style.background="transparent";}}}>
+            <div style={{width:6,height:6,borderRadius:"50%",background:isTp?V.primary:V.sidebarMuted,marginRight:V.s2,flexShrink:0}}/>
+            {editId===page.id
+              ?<input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onBlur={()=>commitPage(page.id)} onKeyDown={e=>{if(e.key==="Enter")commitPage(page.id);if(e.key==="Escape")setEditId(null);}} onClick={e=>e.stopPropagation()} style={{flex:1,fontSize:V.sm,fontWeight:600,background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:V.r2,color:V.sidebarText,padding:"1px 5px",outline:"none",minWidth:0,fontFamily:V.font}}/>
+              :<span onDoubleClick={e=>startEdit(page.id,page.title,e)} title="Double-click to rename" style={{flex:1,fontSize:V.sm,fontWeight:600,color:V.sidebarText,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0}}>{page.title}</span>
+            }
+            {pkCnt>0&&<span title="Has page keys" style={{fontSize:9,padding:"1px 4px",background:V.primary,color:"#fff",borderRadius:V.rFull,fontWeight:700,flexShrink:0,marginRight:3}}>{pkCnt}k</span>}
+            {(()=>{const prf=getRequiredFields({pages:[page]});if(prf.length===0)return null;const c=reqColor(0,prf.length);return <span title={`${prf.length} required field${prf.length!==1?"s":""} on this page`} style={{fontSize:9,padding:"1px 5px",borderRadius:V.rFull,background:c.bg,color:c.text,fontWeight:700,flexShrink:0,marginRight:2,border:`1px solid ${c.dot}33`}}>{prf.length}*</span>})()}
+            {form.pages.length>1&&<button onClick={e=>{e.stopPropagation();onDeletePage(page.id);}} style={{background:"none",border:"none",color:"rgba(255,255,255,0.3)",fontSize:14,cursor:"pointer",padding:"0 0 0 3px",lineHeight:1,flexShrink:0}} onMouseEnter={e=>e.target.style.color="#fff"} onMouseLeave={e=>e.target.style.color="rgba(255,255,255,0.3)"}>×</button>}
+          </div>
+          {page.sections.map(sec=>{
+            const isA=sec.id===activeSectionId;const skCnt=0;const isRep=sec.settings?.repeatable;
+            return <div key={sec.id}
+              data-drop-page-id={page.id}
+              data-drop-sec-id={sec.id}
+              onClick={()=>onSelectSection(page.id,sec.id)}
+              style={{...rowS(isA),padding:`${V.s1} ${V.s2} ${V.s1} 24px`,outline:"none",transition:"background .12s",
+                background:(columnDrag||fieldDrag)?isA?"rgba(0,115,234,0.3)":"rgba(0,115,234,0.08)":isA?V.sidebarActive:"transparent",
+              }}
+              onMouseEnter={e=>{if(columnDrag||fieldDrag){e.currentTarget.style.background="rgba(0,115,234,0.35)";}else if(!isA){e.currentTarget.style.background=V.sidebarHover;}}}
+              onMouseLeave={e=>{if(columnDrag||fieldDrag){e.currentTarget.style.background=isA?"rgba(0,115,234,0.3)":"rgba(0,115,234,0.08)";}else if(!isA){e.currentTarget.style.background="transparent";}}}>
+              {editId===sec.id
+                ?<input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onBlur={()=>commitSec(page.id,sec.id)} onKeyDown={e=>{if(e.key==="Enter")commitSec(page.id,sec.id);if(e.key==="Escape")setEditId(null);}} onClick={e=>e.stopPropagation()} style={{flex:1,fontSize:V.xs,background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:V.r2,color:V.sidebarText,padding:"1px 5px",outline:"none",minWidth:0,fontFamily:V.font}}/>
+                :<span onDoubleClick={e=>startEdit(sec.id,sec.title,e)} title="Double-click to rename" style={{flex:1,fontSize:V.xs,color:isA?V.sidebarText:V.sidebarMuted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sec.title}</span>
+              }
+              {isRep&&<span title="Repeatable" style={{fontSize:9,flexShrink:0,marginRight:2}}>🔁</span>}
+              {skCnt>0&&<span title="Has section keys" style={{fontSize:9,padding:"1px 4px",background:`${V.primary}cc`,color:"#fff",borderRadius:V.rFull,fontWeight:700,flexShrink:0,marginRight:2}}>{skCnt}k</span>}
+              <button onClick={e=>{e.stopPropagation();onOpenSecSettings(page.id,sec.id);}} title="Section settings" style={{background:"none",border:"none",color:"rgba(255,255,255,0.3)",fontSize:12,cursor:"pointer",padding:"1px 3px",lineHeight:1,flexShrink:0}} onMouseEnter={e=>e.target.style.color="#fff"} onMouseLeave={e=>e.target.style.color="rgba(255,255,255,0.3)"}>⚙</button>
+              {page.sections.length>1&&<button onClick={e=>{e.stopPropagation();onDeleteSection(page.id,sec.id);}} style={{background:"none",border:"none",color:"rgba(255,255,255,0.25)",fontSize:13,cursor:"pointer",padding:"0 0 0 2px",lineHeight:1,flexShrink:0}} onMouseEnter={e=>e.target.style.color="#fff"} onMouseLeave={e=>e.target.style.color="rgba(255,255,255,0.25)"}>×</button>}
+            </div>;
+          })}
+        </div>;
+      })}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:`${V.s3} ${V.s3}`,background:"rgba(0,0,0,0.18)",marginTop:V.s2,borderTop:`1px solid ${V.sidebarBorder}`}}>
+        <span style={{fontSize:V.sm,fontWeight:700,color:V.sidebarText}}>Sections</span>
+        <button onClick={()=>onAddSection(activePage.id)} style={{background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.2)",color:V.sidebarText,width:22,height:22,borderRadius:V.r2,cursor:"pointer",fontSize:15,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.22)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.1)"}>+</button>
+      </div>
+      {activePage.sections.map(sec=>{
+        const isA=sec.id===activeSectionId;const isRep=sec.settings?.repeatable;
+        return <div key={`b${sec.id}`}
+          data-drop-page-id={activePage.id}
+          data-drop-sec-id={sec.id}
+          onClick={()=>onSelectSection(activePage.id,sec.id)}
+          style={{...rowS(isA),padding:`${V.s2} ${V.s3} ${V.s2} ${V.s2}`,outline:"none",transition:"background .12s",
+            background:(columnDrag||fieldDrag)?isA?"rgba(0,115,234,0.3)":"rgba(0,115,234,0.08)":isA?V.sidebarActive:"transparent",
+          }}
+          onMouseEnter={e=>{if(columnDrag||fieldDrag){e.currentTarget.style.background="rgba(0,115,234,0.35)";}else if(!isA){e.currentTarget.style.background=V.sidebarHover;}}}
+          onMouseLeave={e=>{if(columnDrag||fieldDrag){e.currentTarget.style.background=isA?"rgba(0,115,234,0.3)":"rgba(0,115,234,0.08)";}else if(!isA){e.currentTarget.style.background="transparent";}}}>
+          <div style={{width:6,height:6,borderRadius:"50%",background:isA?V.primary:V.sidebarMuted,marginRight:V.s2,flexShrink:0}}/>
+          <span style={{flex:1,fontSize:V.sm,fontWeight:isA?600:400,color:isA?V.sidebarText:V.sidebarMuted,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sec.title}</span>
+          {isRep&&<span style={{fontSize:9,marginRight:3}}>🔁</span>}
+          {(()=>{const srf=getRequiredFields({pages:[{...activePage,sections:[sec]}]});if(srf.length===0)return null;const c=reqColor(0,srf.length);return <span title={`${srf.length} required field${srf.length!==1?"s":""}  in this section`} style={{fontSize:9,padding:"1px 5px",borderRadius:V.rFull,background:c.bg,color:c.text,fontWeight:700,flexShrink:0,border:`1px solid ${c.dot}44`}}>{srf.length}*</span>})()}
+        </div>;
+      })}
+    </div>
+  </div>;
+}
+
+// ─── Modals ───────────────────────────────────────────────────────────────────
+function JsonModal({form,onClose}){
+  const [tab,setTab]=useState("schema");
+  const schema=JSON.stringify(form,null,2);
+  const exportMap={};
+  form.pages.forEach(p=>{
+    p.sections.forEach(s=>{
+      s.rows.forEach(r=>r.cells.forEach(c=>c.fields.forEach(f=>{
+        (f.libraryRows||[]).forEach(lr=>{exportMap[lr.exportKey]={scope:"field",fieldId:f.id,label:f.label,type:f.type,libraryId:lr.libraryId,category:lr.category};});
+      })));
+    });
+  });
+  const kmap=JSON.stringify(exportMap,null,2);const text=tab==="schema"?schema:kmap;
+  return <div style={{position:"fixed",inset:0,background:"rgba(28,31,59,0.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:3000,backdropFilter:"blur(2px)"}}>
+    <div style={{background:V.bgSurface,borderRadius:V.r5,width:"min(680px,95vw)",maxHeight:"85vh",display:"flex",flexDirection:"column",boxShadow:V.shadow3,overflow:"hidden",fontFamily:V.font}}>
+      <div style={{display:"flex",alignItems:"center",padding:`${V.s4} ${V.s5}`,borderBottom:`1px solid ${V.borderLight}`}}><div style={{fontWeight:700,fontSize:V.lg,color:V.textPrimary,flex:1}}>Export Form Data</div><button onClick={onClose} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:V.textDisabled}} onMouseEnter={e=>e.target.style.color=V.negative} onMouseLeave={e=>e.target.style.color=V.textDisabled}>×</button></div>
+      <div style={{display:"flex",borderBottom:`1px solid ${V.borderLight}`,padding:`0 ${V.s5}`}}>{[["schema","Form Schema"],["keymap","Full Key Map"]].map(([id,lb])=><button key={id} onClick={()=>setTab(id)} style={{padding:`${V.s3} ${V.s4} ${V.s3} 0`,border:"none",background:"none",cursor:"pointer",fontSize:V.sm,fontWeight:tab===id?700:400,color:tab===id?V.primary:V.textSecondary,borderBottom:tab===id?`2px solid ${V.primary}`:"2px solid transparent",marginBottom:-1,fontFamily:V.font,marginRight:V.s4}}>{lb}</button>)}</div>
+      <pre style={{flex:1,overflow:"auto",margin:0,padding:V.s4,fontSize:12,color:V.textPrimary,fontFamily:"monospace",background:V.bgApp,lineHeight:1.65}}>{text}</pre>
+      <div style={{padding:`${V.s3} ${V.s5}`,borderTop:`1px solid ${V.borderLight}`,display:"flex",gap:V.s2,justifyContent:"flex-end"}}><VBtn variant="secondary" size="sm" onClick={()=>navigator.clipboard?.writeText(text)}>Copy JSON</VBtn><VBtn size="sm" onClick={onClose}>Done</VBtn></div>
+    </div>
+  </div>;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PREVIEW RUNTIME — shared state, required tracking, live inputs, required drawer
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+function getRequiredFields(form) {
+  // Returns flat array of { field, sec, page } for all required, non-layout fields
+  const result = [];
+  (form.pages||[]).forEach(page => {
+    (page.sections||[]).forEach(sec => {
+      (sec.rows||[]).forEach(row => {
+        (row.cells||[]).forEach(cell => {
+          (cell.fields||[]).forEach(f => {
+            if (f.required && !["description","divider"].includes(f.type))
+              result.push({ field:f, sec, page });
+          });
+        });
+      });
+    });
+  });
+  return result;
+}
+
+function isFieldFilled(field, values, notValues) {
+  // A required field is "filled" if it has a value OR a not-value selection
+  if (notValues && notValues[field.id]) return true;
+  const v = values[field.id];
+  if (v === undefined || v === null || v === "") return false;
+  if (Array.isArray(v)) return v.length > 0;
+  return true;
+}
+
+// Compute { total, filled } for a list of required fields
+function countRequired(requiredFields, values, notValues) {
+  const total = requiredFields.length;
+  const filled = requiredFields.filter(({field}) => isFieldFilled(field, values, notValues)).length;
+  return { total, filled };
+}
+
+// Color: 0 filled → red, some → yellow, all → green
+function reqColor(filled, total) {
+  if (total === 0) return null;
+  if (filled === 0) return { bg:"#FCEDEF", text:"#D83A52", dot:"#D83A52" };
+  if (filled < total) return { bg:"#FDEFD0", text:"#CB6F00", dot:"#CB6F00" };
+  return { bg:"#E5F5EC", text:"#258750", dot:"#258750" };
+}
+
+// ── RequiredBadge ─────────────────────────────────────────────────────────────
+function RequiredBadge({ filled, total, onClick, size="sm" }) {
+  if (total === 0) return null;
+  const c = reqColor(filled, total);
+  const allDone = filled === total;
+  return (
+    <button
+      onClick={onClick}
+      title={allDone ? "All required fields complete" : `${total - filled} required field${total-filled!==1?"s":""} not yet filled — click to review`}
+      style={{
+        display:"inline-flex", alignItems:"center", gap:4,
+        padding: size==="xs" ? "1px 6px" : "2px 8px",
+        borderRadius:V.rFull,
+        background:c.bg, color:c.text,
+        border:`1px solid ${c.dot}44`,
+        fontSize: size==="xs" ? 9 : V.xs,
+        fontWeight:700, fontFamily:V.font,
+        cursor: onClick ? "pointer" : "default",
+        transition:"all .15s",
+        flexShrink:0,
+      }}
+      onMouseEnter={e=>{ if(onClick){ e.currentTarget.style.background=c.dot; e.currentTarget.style.color="#fff"; }}}
+      onMouseLeave={e=>{ if(onClick){ e.currentTarget.style.background=c.bg; e.currentTarget.style.color=c.text; }}}
+    >
+      <span style={{
+        width:6, height:6, borderRadius:"50%", background:c.dot,
+        display:"inline-block", flexShrink:0,
+      }}/>
+      {allDone ? "✓" : `${filled}/${total}`} required
+    </button>
+  );
+}
+
+// ── RequiredDrawer ────────────────────────────────────────────────────────────
+// Full-screen right-side flyout. Each field has a Submit button — clicking it
+// marks the field as done and permanently removes it from the list.
+function RequiredDrawer({ form, values, notValues, onClose, onJump, scope, scopeId, onValue, onNotValue }) {
+  const libs = form.libraries || [];
+
+  // submitted: Set of field IDs the user has explicitly submitted in this drawer session.
+  // Once submitted, a field never reappears even if its value is cleared later.
+  const [submitted, setSubmitted] = useState(new Set());
+
+  const submitField = (fieldId) => {
+    setSubmitted(prev => new Set([...prev, fieldId]));
+  };
+
+  const allRequired = getRequiredFields(form);
+  const scoped = allRequired.filter(({field, sec, page}) => {
+    if (scope === "page")    return page.id === scopeId;
+    if (scope === "section") return sec.id  === scopeId;
+    return true;
+  });
+
+  // A field needs attention only if: not submitted AND not filled
+  const pendingFields = scoped.filter(({field}) =>
+    !submitted.has(field.id) && !isFieldFilled(field, values, notValues)
+  );
+
+  // For counts: "done" = submitted OR filled
+  const doneCount = scoped.filter(({field}) =>
+    submitted.has(field.id) || isFieldFilled(field, values, notValues)
+  ).length;
+
+  // Only group and show pending fields
+  const groups = [];
+  pendingFields.forEach(item => {
+    let pg = groups.find(g => g.page.id === item.page.id);
+    if (!pg) { pg = { page:item.page, sections:[] }; groups.push(pg); }
+    let sg = pg.sections.find(s => s.sec.id === item.sec.id);
+    if (!sg) { sg = { sec:item.sec, fields:[] }; pg.sections.push(sg); }
+    sg.fields.push(item.field);
+  });
+
+  const scopeLabel = scope === "form" ? "Form" : scope === "page" ? "Page" : "Section";
+  const allDone = pendingFields.length === 0;
+  const pct = scoped.length > 0 ? Math.round((doneCount / scoped.length) * 100) : 100;
+  const barColor = allDone ? V.positive : doneCount > 0 ? V.warning : V.negative;
+
+  return (
+    <div
+      style={{ position:"fixed", inset:0, zIndex:2000, display:"flex", justifyContent:"flex-end" }}
+      onClick={onClose}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          width:"min(480px,100vw)", height:"100%",
+          background:V.bgSurface,
+          display:"flex", flexDirection:"column",
+          boxShadow:"-8px 0 32px rgba(0,0,0,0.18)",
+          fontFamily:V.font, overflow:"hidden",
+        }}
+      >
+        {/* ── Top bar ── */}
+        <div style={{
+          background: allDone ? V.positive : V.negative,
+          padding:`${V.s3} ${V.s4}`,
+          display:"flex", alignItems:"center", gap:V.s3,
+          flexShrink:0,
+        }}>
+          <button onClick={onClose}
+            style={{ display:"flex",alignItems:"center",gap:V.s2,background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",padding:"5px 12px",borderRadius:V.r2,cursor:"pointer",fontSize:V.sm,fontWeight:600,fontFamily:V.font,transition:"background .12s",flexShrink:0 }}
+            onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.35)"}
+            onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.2)"}>
+            ← Back to form
+          </button>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontSize:V.md, fontWeight:700, color:"#fff", fontFamily:V.font }}>
+              {allDone
+                ? "✓ All required complete"
+                : `${pendingFields.length} field${pendingFields.length!==1?"s":""} remaining`}
+            </div>
+            <div style={{ fontSize:V.xs, color:"rgba(255,255,255,0.75)", fontFamily:V.font, marginTop:1 }}>
+              {scopeLabel} · {doneCount}/{scoped.length} done
+            </div>
+          </div>
+          <button onClick={onClose}
+            style={{ background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",width:28,height:28,borderRadius:"50%",cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}
+            onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.35)"}
+            onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.2)"}>×</button>
+        </div>
+
+        {/* ── Progress bar ── */}
+        <div style={{ height:4, background:V.borderLight, flexShrink:0 }}>
+          <div style={{ height:"100%", width:`${pct}%`, background:barColor, transition:"width .4s" }}/>
+        </div>
+
+        {/* ── Field list ── */}
+        <div style={{ overflowY:"auto", flex:1, padding:V.s4 }}>
+          {allDone ? (
+            <div style={{ textAlign:"center", padding:`${V.s6} 0`, color:V.positive, fontFamily:V.font }}>
+              <div style={{ fontSize:40, marginBottom:V.s3 }}>✓</div>
+              <div style={{ fontSize:V.lg, fontWeight:700, marginBottom:V.s2 }}>All done!</div>
+              <div style={{ fontSize:V.sm, color:V.textSecondary, marginBottom:V.s4 }}>
+                All required fields in this {scopeLabel.toLowerCase()} are complete.
+              </div>
+              <button onClick={onClose}
+                style={{ padding:"8px 24px", background:V.positive, color:"#fff", border:"none", borderRadius:V.r3, fontSize:V.sm, fontWeight:700, cursor:"pointer", fontFamily:V.font }}>
+                ← Back to form
+              </button>
+            </div>
+          ) : groups.map(({page, sections}) => {
+            const pPending = sections.flatMap(sg => sg.fields).length;
+            const pTotal   = scoped.filter(item => item.page.id === page.id).length;
+            const pDone    = pTotal - pPending;
+            const pC = reqColor(pDone, pTotal);
+            return (
+              <div key={page.id} style={{ marginBottom:V.s5 }}>
+                {/* Page heading */}
+                <div style={{
+                  fontSize:V.xs, fontWeight:700, color:V.textDisabled, textTransform:"uppercase",
+                  letterSpacing:".1em", fontFamily:V.font, marginBottom:V.s3,
+                  paddingBottom:V.s2, borderBottom:`1px solid ${V.borderLight}`,
+                  display:"flex", alignItems:"center", gap:V.s2,
+                }}>
+                  <span style={{ flex:1 }}>{page.title}</span>
+                  {pC && <span style={{ padding:"1px 7px", borderRadius:V.rFull, background:pC.bg, color:pC.text, fontSize:9, fontWeight:700, textTransform:"none", letterSpacing:0 }}>{pDone}/{pTotal}</span>}
+                </div>
+
+                {sections.map(({sec, fields}) => {
+                  const sTotal = scoped.filter(item => item.sec.id === sec.id).length;
+                  const sDone  = sTotal - fields.length;
+                  const sC = reqColor(sDone, sTotal);
+                  return (
+                    <div key={sec.id} style={{ marginBottom:V.s4 }}>
+                      {/* Section heading */}
+                      <div style={{ display:"flex", alignItems:"center", gap:V.s2, marginBottom:V.s3 }}>
+                        <span style={{ fontSize:V.sm, fontWeight:700, color:V.textPrimary, fontFamily:V.font, flex:1 }}>{sec.title}</span>
+                        {sC && <span style={{ padding:"2px 8px", borderRadius:V.rFull, background:sC.bg, color:sC.text, fontSize:V.xs, fontWeight:700 }}>{sDone}/{sTotal}</span>}
+                      </div>
+
+                      {/* Fields — each with LiveField + Submit button */}
+                      {fields.map(f => {
+                        const hasCurVal = isFieldFilled(f, values, notValues);
+                        return (
+                          <div key={f.id} style={{
+                            marginBottom:V.s3,
+                            border:`1px solid ${V.borderLight}`,
+                            borderRadius:V.r4,
+                            overflow:"hidden",
+                            boxShadow:V.shadow1,
+                          }}>
+                            {/* Field input area */}
+                            <div style={{ padding:V.s3, background:V.bgSurface }}>
+                              <LiveField
+                                field={f}
+                                values={values}
+                                notValues={notValues}
+                                onValue={onValue}
+                                onNotValue={onNotValue}
+                                libraries={libs}
+                              />
+                            </div>
+                            {/* Submit bar */}
+                            <div style={{
+                              padding:`${V.s2} ${V.s3}`,
+                              borderTop:`1px solid ${V.borderLight}`,
+                              background:hasCurVal ? V.positiveBg : V.bgApp,
+                              display:"flex", alignItems:"center", gap:V.s3,
+                              transition:"background .2s",
+                            }}>
+                              <span style={{
+                                fontSize:V.xs, color:hasCurVal?V.positive:V.textDisabled,
+                                fontFamily:V.font, flex:1,
+                              }}>
+                                {hasCurVal ? "✓ Ready to submit" : "Fill in this field, then submit"}
+                              </span>
+                              <button
+                                onClick={() => submitField(f.id)}
+                                disabled={!hasCurVal}
+                                style={{
+                                  padding:"5px 16px",
+                                  background: hasCurVal ? V.positive : V.bgHover,
+                                  color: hasCurVal ? "#fff" : V.textDisabled,
+                                  border:"none",
+                                  borderRadius:V.r2,
+                                  cursor: hasCurVal ? "pointer" : "not-allowed",
+                                  fontSize:V.sm, fontWeight:700, fontFamily:V.font,
+                                  transition:"all .15s",
+                                  display:"flex", alignItems:"center", gap:V.s1,
+                                }}
+                                onMouseEnter={e=>{ if(hasCurVal) e.currentTarget.style.background="#1a6641"; }}
+                                onMouseLeave={e=>{ if(hasCurVal) e.currentTarget.style.background=V.positive; }}
+                              >
+                                {hasCurVal ? "✓ Submit" : "Submit"}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── LiveField: interactive field input that writes to shared values ────────────
+function LiveField({ field, values, notValues, onValue, onNotValue, libraries }) {
+  const da = field.dataAttrs || {};
+  const showCats = da.showCategories || [];
+  const fieldRows = field.libraryRows || [];
+  // Rows visible to respondent as chips, grouped by category
+  const chipRows = fieldRows.filter(r => showCats.includes(r.category) && r.category !== "Nillable Marker");
+  const hasNVorPN = chipRows.length > 0;
+  const [notMode, setNotMode] = useState(false);
+  const [clickCount, setClickCount] = useState(0);
+  const clickTimer = useRef(null);
+
+  const val = values[field.id] ?? "";
+  const notVal = notValues[field.id] ?? null;
+  const isFilled = isFieldFilled(field, values, notValues);
+  const isLayout = ["description","divider"].includes(field.type);
+
+  // Double-tap to enter NOT mode
+  const handleTap = () => {
+    if (!hasNVorPN) return;
+    const newCount = clickCount + 1;
+    setClickCount(newCount);
+    clearTimeout(clickTimer.current);
+    if (newCount >= 2) {
+      setNotMode(n => !n);
+      setClickCount(0);
+    } else {
+      clickTimer.current = setTimeout(() => setClickCount(0), 350);
+    }
+  };
+
+  if (isLayout) return <FieldPreview field={field}/>;
+
+  const inputBase = {
+    width:"100%", padding:"7px 10px", fontSize:V.sm,
+    border:`1px solid ${notMode ? V.negative+"66" : isFilled ? V.positive+"66" : V.border}`,
+    borderRadius:V.r3, background:notMode?"#fff8f8":V.bgSurface,
+    color:V.textPrimary, outline:"none", fontFamily:V.font,
+    boxSizing:"border-box", transition:"border-color .15s",
+  };
+
+  // renderInput → see renderLiveFieldInput() top-level
+  return (
+    <div
+      style={{borderRadius:V.r3,border:fieldBor,background:fieldBg,padding:`${V.s3} ${V.s3}`,marginBottom:V.s1,transition:"all .2s",cursor:hasNVorPN?"pointer":"default",userSelect:"none"}}
+      onDoubleClick={handleDoubleTap}
+      title={hasNVorPN?"Double-tap to toggle NOT / Pertinent Negative mode":""}
+    >
+      {!isLayout && (
+        <div style={{display:"flex",alignItems:"center",gap:V.s2,marginBottom:V.s2}}>
+          <label style={{display:"block",fontSize:V.sm,fontWeight:600,color:labelCol,fontFamily:V.font,flex:1}}>
+            {field.label}{field.required&&<span style={{color:V.negative,marginLeft:2}}>*</span>}
+          </label>
+          {notState && (
+            <span style={{fontSize:V.xs,padding:"1px 7px",borderRadius:V.rFull,background:V.negativeBg,color:V.negative,fontWeight:700,fontFamily:V.font,flexShrink:0}}>
+              NOT Mode
+            </span>
+          )}
+          {hasNVorPN && !notState && (
+            <span style={{fontSize:9,color:V.textDisabled,fontFamily:V.font,flexShrink:0}}>double-tap ↑</span>
+          )}
+        </div>
+      )}
+
+      {/* Normal field input (dimmed when in NOT mode) */}
+      {!notState && (
+        <div style={{pointerEvents:"none"}}>
+          <FieldPreview field={field}/>
+        </div>
+      )}
+
+      {/* NOT mode: show NV + PN chip selectors */}
+      {notState && (
+        <div style={{display:"flex",flexDirection:"column",gap:V.s2}}>
+          {[...new Set(chipRows.map(r=>r.category))].map(cat=>{
+            const catRows = chipRows.filter(r=>r.category===cat);
+            const catColor = cat==="Pertinent Negative"?CAT.layout:cat==="NOT Value"?CAT.choice:CAT.basic;
+            return (
+              <div key={cat}>
+                <div style={{fontSize:"10px",fontWeight:700,color:catColor.dot,textTransform:"uppercase",letterSpacing:".06em",marginBottom:4,fontFamily:V.font}}>{cat}</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                  {catRows.map(row=>(
+                    <span key={row.rowId}
+                      onClick={e=>{e.stopPropagation();setSelectedNot(prev=>prev?.rowId===row.rowId?null:{...row,type:cat==="NOT Value"?"nv":"pn"});}}
+                      style={{display:"inline-flex",alignItems:"center",gap:3,padding:"3px 10px",borderRadius:V.rFull,fontSize:V.xs,fontWeight:600,cursor:"pointer",fontFamily:V.font,transition:"all .12s",
+                        background:selectedNot?.rowId===row.rowId?catColor.dot:"#fff",
+                        color:selectedNot?.rowId===row.rowId?"#fff":catColor.dot,
+                        border:`1.5px solid ${catColor.dot}`,
+                      }}>
+                      {row.label}
+                      {row.code&&<code style={{fontSize:9,opacity:.7,fontFamily:"monospace"}}>{row.code}</code>}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+          {selectedNot && (
+            <div style={{marginTop:2,fontSize:V.xs,color:V.negative,fontFamily:V.font,fontStyle:"italic"}}>
+              Selected: <strong>{selectedNot.label}</strong>{selectedNot.code?` (${selectedNot.code})`:""}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Narrative text hint */}
+      {hasNarr && (
+        <div style={{marginTop:V.s2,padding:`${V.s1} ${V.s2}`,background:notState?"#ffecec":V.bgHighlight,borderRadius:V.r2,fontSize:V.xs,color:notState?V.negative:V.primary,fontFamily:V.font,fontStyle:"italic",borderLeft:`2px solid ${notState?V.negative:V.primary}`}}>
+          ✍ {narrativeText.replace(/<value>/g,"[value]")}
+        </div>
+      )}
+
+      {field.helpText && (
+        <div style={{fontSize:V.xs,color:V.textSecondary,marginTop:V.s1,fontFamily:V.font,fontStyle:"italic"}}>{field.helpText}</div>
+      )}
+    </div>
+  );
+}
+
+// ─── RepeatableSectionInstance ────────────────────────────────────────────────
+function RepeatableSectionInstance({sec, instanceIdx, total, onRemove, libraries}){
+  const showLabel = total > 1;
+  return (
+    <div style={{
+      border:`1.5px solid ${V.borderLight}`, borderRadius:V.r4,
+      background:V.bgSurface, overflow:"hidden", marginBottom:V.s3,
+      boxShadow:V.shadow1,
+    }}>
+      {/* Instance header */}
+      {showLabel && (
+        <div style={{
+          display:"flex", alignItems:"center", justifyContent:"space-between",
+          padding:`${V.s2} ${V.s4}`, background:V.bgHighlight,
+          borderBottom:`1px solid ${V.borderLight}`,
+        }}>
+          <div style={{display:"flex",alignItems:"center",gap:V.s2}}>
+            <span style={{fontSize:14}}>🔁</span>
+            <span style={{fontSize:V.sm,fontWeight:700,color:V.primary,fontFamily:V.font}}>
+              {sec.title} — Entry {instanceIdx + 1}
+            </span>
+          </div>
+          <button
+            onClick={onRemove}
+            style={{background:"none",border:`1px solid ${V.border}`,cursor:"pointer",color:V.textSecondary,fontSize:V.xs,padding:"3px 10px",borderRadius:V.r2,fontFamily:V.font,fontWeight:600,display:"flex",alignItems:"center",gap:4}}
+            onMouseEnter={e=>{e.currentTarget.style.background=V.negativeBg;e.currentTarget.style.borderColor=V.negative;e.currentTarget.style.color=V.negative;}}
+            onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.borderColor=V.border;e.currentTarget.style.color=V.textSecondary;}}>
+            × Remove
+          </button>
+        </div>
+      )}
+      {/* Fields */}
+      <div style={{padding:`${V.s4} ${V.s4}`}}>
+        {sec.rows.map(row=>(
+          <div key={row.id+"-"+instanceIdx} style={{display:"flex",gap:V.s4,marginBottom:V.s4}}>
+            {row.cells.map((cell,ci)=>(
+              <div key={cell.id} style={{flex:row.preset.cols[ci],minWidth:0,display:"flex",flexDirection:"column",gap:V.s3}}>
+                {cell.fields.map(f=>{
+                  const isL=["description","divider"].includes(f.type);
+                  return (
+                    <div key={f.id}>
+                      {isL ? <FieldPreview field={f}/> : <PreviewField field={f} libraries={libraries}/>}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── PreviewSection: handles repeat state for a single section ────────────────
+function PreviewSection({sec, showTitle, libraries}){
+  const isRepeatable = !!sec.settings?.repeatable;
+  const max = sec.settings?.maxRepeats || 10;
+  const btnLabel = sec.settings?.repeatLabel || "+ Add Another";
+
+  // Each entry is just a unique id so we can add/remove and key correctly
+  const [instances, setInstances] = useState([uid()]);
+
+  const addInstance = () => {
+    if(instances.length < max) setInstances(p=>[...p, uid()]);
+  };
+  const removeInstance = (id) => {
+    if(instances.length > 1) setInstances(p=>p.filter(x=>x!==id));
+  };
+
+  const atMax = instances.length >= max;
+
+  return (
+    <div>
+      {/* Section heading (only when multiple sections on page) */}
+      {showTitle && (
+        <div style={{display:"flex",alignItems:"center",gap:V.s2,marginBottom:V.s3}}>
+          <div style={{width:3,height:"100%",minHeight:20,background:V.primary,borderRadius:V.rFull,alignSelf:"stretch"}}/>
+          <div>
+            <div style={{fontWeight:700,fontSize:V.md,color:V.primary,fontFamily:V.font}}>{sec.title}</div>
+            {isRepeatable && (
+              <span style={{fontSize:V.xs,color:V.textSecondary,fontFamily:V.font}}>
+                {instances.length} of {max} {instances.length===1?"entry":"entries"}
+              </span>
+            )}
+          </div>
+          {isRepeatable && (
+            <span style={{marginLeft:"auto",fontSize:11,padding:"2px 7px",background:V.primaryLight,color:V.primary,borderRadius:V.rFull,fontWeight:700,fontFamily:V.font}}>🔁 Repeatable</span>
+          )}
+        </div>
+      )}
+
+      {/* Instances */}
+      {isRepeatable ? (
+        <>
+          {instances.map((id, idx)=>(
+            <RepeatableSectionInstance
+              key={id}
+              sec={sec}
+              instanceIdx={idx}
+              total={instances.length}
+              onRemove={()=>removeInstance(id)}
+              libraries={libraries}
+            />
+          ))}
+
+          {/* Add another button */}
+          <button
+            onClick={addInstance}
+            disabled={atMax}
+            style={{
+              width:"100%", padding:`${V.s3} ${V.s4}`,
+              border:`2px dashed ${atMax?V.borderLight:V.primary}`,
+              borderRadius:V.r4, background:atMax?"transparent":V.primaryBg,
+              color:atMax?V.textDisabled:V.primary,
+              fontSize:V.sm, fontWeight:700, fontFamily:V.font,
+              cursor:atMax?"not-allowed":"pointer",
+              display:"flex", alignItems:"center", justifyContent:"center", gap:V.s2,
+              transition:"all .15s", marginBottom:V.s2,
+            }}
+            onMouseEnter={e=>{if(!atMax){e.currentTarget.style.background=V.bgSelected;}}}
+            onMouseLeave={e=>{if(!atMax){e.currentTarget.style.background=V.primaryBg;}}}
+          >
+            <span style={{fontSize:16, fontWeight:300}}>+</span>
+            {atMax ? `Maximum ${max} entries reached` : btnLabel}
+          </button>
+
+          {/* Entry counter */}
+          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:V.s2}}>
+            <div style={{display:"flex",gap:4}}>
+              {Array.from({length:max}).map((_,i)=>(
+                <div key={i} style={{width:6,height:6,borderRadius:"50%",background:i<instances.length?V.primary:V.borderLight,transition:"background .2s"}}/>
+              ))}
+            </div>
+          </div>
+        </>
+      ) : (
+        // Non-repeatable: render rows directly
+        <div>
+          {sec.rows.map(row=>(
+            <div key={row.id} style={{display:"flex",gap:V.s4,marginBottom:V.s4}}>
+              {row.cells.map((cell,ci)=>(
+                <div key={cell.id} style={{flex:row.preset.cols[ci],minWidth:0,display:"flex",flexDirection:"column",gap:V.s3}}>
+                  {cell.fields.map(f=>{
+                    const isL=["description","divider"].includes(f.type);
+                    return (
+                      <div key={f.id}>
+                        {isL ? <FieldPreview field={f}/> : <PreviewField field={f} libraries={libraries}/>}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Shared preview page body renderer (live, with values) ────────────────────
+function PreviewPageBody({ page, libs, values, notValues, onValue, onNotValue, onOpenDrawer, brand }) {
+  const pageReqFields = [];
+  (page.sections||[]).forEach(sec=>(sec.rows||[]).forEach(row=>(row.cells||[]).forEach(cell=>(cell.fields||[]).forEach(f=>{
+    if(f.required&&!["description","divider"].includes(f.type)) pageReqFields.push({field:f});
+  }))));
+  const {total,filled} = countRequired(pageReqFields, values, notValues);
+
+  return <>
+    <div style={{display:"flex",alignItems:"center",gap:V.s3,marginBottom:V.s3,flexWrap:"wrap"}}>
+      {page.title&&<div style={{fontWeight:700,fontSize:V.lg,color:brand||V.primary,fontFamily:V.font,flex:1}}>{page.title}</div>}
+      {total>0&&<RequiredBadge filled={filled} total={total} onClick={()=>onOpenDrawer("page",page.id)}/>}
+    </div>
+    {page.description&&<div style={{fontSize:V.sm,color:V.textSecondary,marginBottom:V.s4,fontFamily:V.font,lineHeight:1.5}}>{page.description}</div>}
+    {page.sections.map((sec,si)=>(
+      <div key={`${page.id}-${sec.id}`} style={{marginBottom:si<page.sections.length-1?V.s6:0}}>
+        <LiveSection sec={sec} showTitle={page.sections.length>1} values={values} notValues={notValues}
+          onValue={onValue} onNotValue={onNotValue} libraries={libs}
+          onOpenDrawer={onOpenDrawer}/>
+      </div>
+    ))}
+  </>;
+}
+
+// ─── Layout 1: Progress Form (default) ────────────────────────────────────────
+function PreviewProgress({ form, libs, onClose, maxW }) {
+  const [pi, setPi] = useState(0);
+  const [values, setValues] = useState({});
+  const [notValues, setNotValues] = useState({});
+  const [drawer, setDrawer] = useState(null); // {scope, scopeId}
+
+  const page  = form.pages[pi];
+  const s     = form.settings;
+  const brand = s.brandColor || V.primary;
+  const pct   = ((pi+1)/form.pages.length)*100;
+
+  const onValue    = (id,v) => setValues(prev=>({...prev,[id]:v}));
+  const onNotValue = (id,v) => setNotValues(prev=>({...prev,[id]:v}));
+  const openDrawer = (scope,scopeId) => setDrawer({scope,scopeId});
+
+  // Form-level required stats for the header badge
+  const allReq = getRequiredFields(form);
+  const {total:fTotal, filled:fFilled} = countRequired(allReq, values, notValues);
+
+  return (
+    <div style={{background:V.bgSurface,borderRadius:V.r5,width:maxW?"100%":"min(640px,95vw)",maxWidth:maxW?undefined:"640px",maxHeight:maxW?"100%":"92vh",display:"flex",flexDirection:"column",boxShadow:maxW?"none":V.shadow3,overflow:"hidden",fontFamily:V.font,position:"relative"}}>
+      {/* Header */}
+      <div style={{background:brand,padding:`${V.s5} ${V.s5} ${V.s4}`,color:"#fff",flexShrink:0}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:V.s3}}>
+          <div style={{flex:1}}>
+            <div style={{fontSize:V.xl,fontWeight:700}}>{form.name}</div>
+            {form.description&&<div style={{fontSize:V.sm,opacity:.85,marginTop:4}}>{form.description}</div>}
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:V.s2,flexShrink:0,marginLeft:V.s3}}>
+            {fTotal>0&&(
+              <button onClick={()=>openDrawer("form",null)}
+                style={{background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",padding:"3px 10px",borderRadius:V.rFull,cursor:"pointer",fontSize:V.xs,fontWeight:700,fontFamily:V.font,display:"flex",alignItems:"center",gap:4}}
+                onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.35)"}
+                onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.2)"}>
+                <span style={{width:6,height:6,borderRadius:"50%",background:fFilled===fTotal?"#4caf50":fFilled>0?"#ffc107":"#ff5252",display:"inline-block"}}/>
+                {fFilled}/{fTotal}
+              </button>
+            )}
+            <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",width:28,height:28,borderRadius:"50%",cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.35)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.2)"}>×</button>
+          </div>
+        </div>
+        {(s.showProgress||!s.formLayout)&&(
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:V.xs,opacity:.8,marginBottom:4}}>
+              <span>{s.showPageNumbers!==false?`Page ${pi+1} of ${form.pages.length}`:""}</span>
+              <span>{Math.round(pct)}%</span>
+            </div>
+            <div style={{height:4,background:"rgba(255,255,255,0.25)",borderRadius:V.rFull}}>
+              <div style={{height:"100%",width:`${pct}%`,background:"#fff",borderRadius:V.rFull,transition:"width .35s"}}/>
+            </div>
+          </div>
+        )}
+      </div>
+      {/* Body */}
+      <div style={{flex:1,overflowY:"auto",padding:V.s5,background:V.bgApp}}>
+        <PreviewPageBody page={page} libs={libs} values={values} notValues={notValues}
+          onValue={onValue} onNotValue={onNotValue} onOpenDrawer={openDrawer} brand={brand}/>
+      </div>
+      {/* Footer */}
+      <div style={{padding:`${V.s3} ${V.s5}`,borderTop:`1px solid ${V.borderLight}`,display:"flex",justifyContent:"space-between",alignItems:"center",background:V.bgSurface,flexShrink:0}}>
+        <VBtn variant="secondary" size="sm" onClick={()=>setPi(i=>Math.max(0,i-1))} style={{opacity:pi===0?.4:1}} disabled={pi===0}>← Prev</VBtn>
+        <div style={{display:"flex",gap:4}}>
+          {form.pages.map((_,i)=>(
+            <div key={i} onClick={()=>setPi(i)} style={{width:8,height:8,borderRadius:"50%",background:i===pi?brand:V.borderLight,cursor:"pointer",transition:"background .2s"}}/>
+          ))}
+        </div>
+        {pi<form.pages.length-1
+          ?<VBtn size="sm" style={{background:brand}} onClick={()=>setPi(i=>i+1)}>Next →</VBtn>
+          :<VBtn size="sm" style={{background:V.positive}}>{s.submitLabel||"Submit"}</VBtn>
+        }
+      </div>
+      {/* Required drawer */}
+      {drawer&&<RequiredDrawer form={form} values={values} notValues={notValues}
+        onValue={onValue} onNotValue={onNotValue}
+        onClose={()=>setDrawer(null)} scope={drawer.scope} scopeId={drawer.scopeId}
+        onJump={(pageId,secId,fieldId)=>{
+          const pi2=form.pages.findIndex(p=>p.id===pageId);
+          if(pi2>=0) setPi(pi2);
+          setDrawer(null);
+        }}/>}
+    </div>
+  );
+}
+
+// ─── Layout 2: Single Page (accordion) ────────────────────────────────────────
+function PreviewSinglePage({ form, libs, onClose, maxW }) {
+  const s = form.settings;
+  const brand = s.brandColor || V.primary;
+  const allowMulti = !!s.singlePageAllowMultiOpen;
+
+  const [openPages, setOpenPages] = useState(()=>{
+    const init={};
+    if(form.pages.length>0) init[form.pages[0].id]=true;
+    return init;
+  });
+  const [values, setValues]       = useState({});
+  const [notValues, setNotValues] = useState({});
+  const [drawer, setDrawer]       = useState(null);
+
+  const onValue    = (id,v) => setValues(prev=>({...prev,[id]:v}));
+  const onNotValue = (id,v) => setNotValues(prev=>({...prev,[id]:v}));
+  const openDrawer = (scope,scopeId) => setDrawer({scope,scopeId});
+
+  const toggle = pid => {
+    if(allowMulti) setOpenPages(p=>({...p,[pid]:!p[pid]}));
+    else setOpenPages(p=>({[pid]:!p[pid]}));
+  };
+
+  const allReq = getRequiredFields(form);
+  const {total:fTotal,filled:fFilled} = countRequired(allReq,values,notValues);
+
+  return (
+    <div style={{background:V.bgSurface,borderRadius:V.r5,width:maxW?"100%":"min(680px,95vw)",maxWidth:maxW?undefined:"680px",maxHeight:maxW?"100%":"92vh",display:"flex",flexDirection:"column",boxShadow:maxW?"none":V.shadow3,overflow:"hidden",fontFamily:V.font,position:"relative"}}>
+      {/* Header */}
+      <div style={{background:brand,padding:`${V.s4} ${V.s5}`,color:"#fff",flexShrink:0,display:"flex",alignItems:"center",gap:V.s3}}>
+        <div style={{flex:1}}>
+          <div style={{fontSize:V.lg,fontWeight:700}}>{form.name}</div>
+          {form.description&&<div style={{fontSize:V.xs,opacity:.85,marginTop:2}}>{form.description}</div>}
+        </div>
+        {fTotal>0&&(
+          <button onClick={()=>openDrawer("form",null)}
+            style={{background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",padding:"3px 10px",borderRadius:V.rFull,cursor:"pointer",fontSize:V.xs,fontWeight:700,fontFamily:V.font,display:"flex",alignItems:"center",gap:4}}
+            onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.35)"}
+            onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.2)"}>
+            <span style={{width:6,height:6,borderRadius:"50%",background:fFilled===fTotal?"#4caf50":fFilled>0?"#ffc107":"#ff5252",display:"inline-block"}}/>
+            {fFilled}/{fTotal} required
+          </button>
+        )}
+        <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",width:28,height:28,borderRadius:"50%",cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.35)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.2)"}>×</button>
+      </div>
+      {/* Accordion body */}
+      <div style={{flex:1,overflowY:"auto",background:V.bgApp}}>
+        {form.pages.map((page,pi)=>{
+          const isOpen = !!openPages[page.id];
+          const pageReq = getRequiredFields({pages:[page]});
+          const {total:pTotal,filled:pFilled} = countRequired(pageReq,values,notValues);
+          return (
+            <div key={page.id} style={{borderBottom:`1px solid ${V.borderLight}`}}>
+              <button onClick={()=>toggle(page.id)}
+                style={{width:"100%",display:"flex",alignItems:"center",gap:V.s3,padding:`${V.s4} ${V.s5}`,background:isOpen?V.bgSurface:V.bgApp,border:"none",cursor:"pointer",textAlign:"left",transition:"background .15s",fontFamily:V.font}}
+                onMouseEnter={e=>{if(!isOpen)e.currentTarget.style.background=V.bgHover;}}
+                onMouseLeave={e=>{if(!isOpen)e.currentTarget.style.background=V.bgApp;}}>
+                <div style={{width:26,height:26,borderRadius:"50%",background:isOpen?brand:V.bgHover,color:isOpen?"#fff":V.textSecondary,fontSize:V.xs,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .15s"}}>{pi+1}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:V.md,fontWeight:700,color:isOpen?brand:V.textPrimary}}>{page.title}</div>
+                  {page.description&&<div style={{fontSize:V.xs,color:V.textSecondary,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{page.description}</div>}
+                </div>
+                {pTotal>0&&<RequiredBadge filled={pFilled} total={pTotal} size="xs"
+                  onClick={e=>{e.stopPropagation();openDrawer("page",page.id);}}/>}
+                <div style={{width:24,height:24,borderRadius:"50%",background:isOpen?brand+"22":"transparent",display:"flex",alignItems:"center",justifyContent:"center",color:isOpen?brand:V.textDisabled,fontSize:12,transition:"all .2s",transform:isOpen?"rotate(180deg)":"rotate(0deg)"}}>▼</div>
+              </button>
+              {isOpen&&(
+                <div style={{padding:`0 ${V.s5} ${V.s5}`,background:V.bgSurface,borderTop:`1px solid ${V.borderLight}`}}>
+                  <div style={{paddingTop:V.s4}}>
+                    <PreviewPageBody page={page} libs={libs} values={values} notValues={notValues}
+                      onValue={onValue} onNotValue={onNotValue} onOpenDrawer={openDrawer} brand={brand}/>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        <div style={{padding:V.s5}}>
+          <VBtn size="lg" style={{background:V.positive,width:"100%",justifyContent:"center"}}>{s.submitLabel||"Submit"}</VBtn>
+        </div>
+      </div>
+      {drawer&&<RequiredDrawer form={form} values={values} notValues={notValues}
+        onValue={onValue} onNotValue={onNotValue}
+        onClose={()=>setDrawer(null)} scope={drawer.scope} scopeId={drawer.scopeId}
+        onJump={(pageId,secId,fieldId)=>{
+          setOpenPages(prev=>({...prev,[pageId]:true}));
+          setDrawer(null);
+        }}/>}
+    </div>
+  );
+}
+
+// ─── Layout 3: Side Navigation ─────────────────────────────────────────────────
+function PreviewSideNav({ form, libs, onClose, maxW }) {
+  const s = form.settings;
+  const brand = s.brandColor || V.primary;
+
+  const [activePi,    setActivePi]    = useState(0);
+  const [activeSecId, setActiveSecId] = useState(form.pages[0]?.sections[0]?.id||null);
+  const [values,      setValues]      = useState({});
+  const [notValues,   setNotValues]   = useState({});
+  const [drawer,      setDrawer]      = useState(null);
+
+  const onValue    = (id,v) => setValues(prev=>({...prev,[id]:v}));
+  const onNotValue = (id,v) => setNotValues(prev=>({...prev,[id]:v}));
+  const openDrawer = (scope,scopeId) => setDrawer({scope,scopeId});
+
+  const activePage = form.pages[activePi] || form.pages[0];
+  const goToSection = (pi,secId) => { setActivePi(pi); setActiveSecId(secId); };
+
+  const allReq = getRequiredFields(form);
+  const {total:fTotal,filled:fFilled} = countRequired(allReq,values,notValues);
+
+  return (
+    <div style={{background:V.bgSurface,borderRadius:V.r5,width:maxW?"100%":"min(820px,97vw)",maxWidth:maxW?undefined:"820px",maxHeight:maxW?"100%":"92vh",display:"flex",flexDirection:"column",boxShadow:maxW?"none":V.shadow3,overflow:"hidden",fontFamily:V.font,position:"relative"}}>
+      {/* Top bar */}
+      <div style={{background:brand,padding:`${V.s3} ${V.s5}`,color:"#fff",flexShrink:0,display:"flex",alignItems:"center",gap:V.s3,height:48}}>
+        <div style={{fontWeight:700,fontSize:V.md,flex:1}}>{form.name}</div>
+        {fTotal>0&&(
+          <button onClick={()=>openDrawer("form",null)}
+            style={{background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",padding:"2px 10px",borderRadius:V.rFull,cursor:"pointer",fontSize:V.xs,fontWeight:700,fontFamily:V.font,display:"flex",alignItems:"center",gap:4}}
+            onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.35)"}
+            onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.2)"}>
+            <span style={{width:6,height:6,borderRadius:"50%",background:fFilled===fTotal?"#4caf50":fFilled>0?"#ffc107":"#ff5252",display:"inline-block"}}/>
+            {fFilled}/{fTotal}
+          </button>
+        )}
+        <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",width:26,height:26,borderRadius:"50%",cursor:"pointer",fontSize:15,display:"flex",alignItems:"center",justifyContent:"center"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.35)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.2)"}>×</button>
+      </div>
+
+      <div style={{display:"flex",flex:1,overflow:"hidden"}}>
+        {/* Left sidebar nav */}
+        <div style={{width:210,background:V.sidebarBg,display:"flex",flexDirection:"column",overflow:"hidden",flexShrink:0}}>
+          <div style={{overflowY:"auto",flex:1,paddingTop:V.s2}}>
+            {form.pages.map((page,pi)=>{
+              const isActivePage = pi===activePi;
+              const pageReq = getRequiredFields({pages:[page]});
+              const {total:pTotal,filled:pFilled} = countRequired(pageReq,values,notValues);
+              const pColor = pTotal===0?null:pFilled===pTotal?"#4caf50":pFilled>0?"#ffc107":"#ff5252";
+              return (
+                <div key={page.id}>
+                  <div onClick={()=>goToSection(pi,page.sections[0]?.id)}
+                    style={{display:"flex",alignItems:"center",gap:V.s2,padding:`${V.s2} ${V.s3}`,cursor:"pointer",background:isActivePage&&activeSecId===page.sections[0]?.id?"rgba(255,255,255,0.15)":"transparent",borderBottom:"1px solid rgba(255,255,255,0.07)",transition:"background .1s"}}
+                    onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.08)"}
+                    onMouseLeave={e=>e.currentTarget.style.background=(isActivePage&&activeSecId===page.sections[0]?.id)?"rgba(255,255,255,0.15)":"transparent"}>
+                    <div style={{width:5,height:5,borderRadius:"50%",background:isActivePage?brand:"rgba(255,255,255,0.4)",flexShrink:0}}/>
+                    <span style={{fontSize:V.xs,fontWeight:700,color:"#fff",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{page.title}</span>
+                    {pColor&&<span style={{width:7,height:7,borderRadius:"50%",background:pColor,flexShrink:0,
+                      cursor:"pointer",boxShadow:`0 0 0 2px ${pColor}44`}}
+                      onClick={e=>{e.stopPropagation();openDrawer("page",page.id);}}
+                      title={`${pFilled}/${pTotal} required fields filled`}/>}
+                  </div>
+                  {isActivePage&&page.sections.length>1&&page.sections.map(sec=>{
+                    const secReq = getRequiredFields({pages:[{...page,sections:[sec]}]});
+                    const {total:sTotal,filled:sFilled} = countRequired(secReq,values,notValues);
+                    const sColor = sTotal===0?null:sFilled===sTotal?"#4caf50":sFilled>0?"#ffc107":"#ff5252";
+                    return (
+                      <div key={sec.id} onClick={()=>goToSection(pi,sec.id)}
+                        style={{display:"flex",alignItems:"center",gap:V.s2,padding:`${V.s1} ${V.s3} ${V.s1} 24px`,cursor:"pointer",background:activeSecId===sec.id?"rgba(255,255,255,0.12)":"transparent",transition:"background .1s"}}
+                        onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.07)"}
+                        onMouseLeave={e=>e.currentTarget.style.background=activeSecId===sec.id?"rgba(255,255,255,0.12)":"transparent"}>
+                        <span style={{fontSize:V.xs,color:activeSecId===sec.id?"rgba(255,255,255,0.95)":"rgba(255,255,255,0.55)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{sec.title}</span>
+                        {sColor&&<span style={{width:6,height:6,borderRadius:"50%",background:sColor,flexShrink:0,cursor:"pointer"}}
+                          onClick={e=>{e.stopPropagation();openDrawer("section",sec.id);}}
+                          title={`${sFilled}/${sTotal} required`}/>}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+          <div style={{padding:V.s3,borderTop:"1px solid rgba(255,255,255,0.1)"}}>
+            <button style={{width:"100%",padding:"7px 0",background:V.positive,border:"none",borderRadius:V.r2,color:"#fff",fontWeight:700,fontSize:V.sm,cursor:"pointer",fontFamily:V.font}}>
+              {s.submitLabel||"Submit"}
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div style={{flex:1,overflowY:"auto",padding:V.s5,background:V.bgApp}}>
+          {activePage&&(
+            <>
+              {activePage.sections.filter(sec=>{
+                const showThis = activeSecId===null||activePage.sections.length===1||sec.id===activeSecId||activeSecId===activePage.sections[0]?.id;
+                return showThis;
+              }).map((sec,si)=>(
+                <div key={`${activePage.id}-${sec.id}`} style={{marginBottom:si<activePage.sections.length-1?V.s6:0}}>
+                  <LiveSection sec={sec} showTitle={activePage.sections.length>1} values={values} notValues={notValues}
+                    onValue={onValue} onNotValue={onNotValue} libraries={libs} onOpenDrawer={openDrawer}/>
+                </div>
+              ))}
+              <div style={{display:"flex",gap:V.s2,marginTop:V.s5,paddingTop:V.s4,borderTop:`1px solid ${V.borderLight}`}}>
+                {activePi>0&&<VBtn variant="secondary" size="sm" onClick={()=>{setActivePi(i=>i-1);setActiveSecId(form.pages[activePi-1]?.sections[0]?.id||null);}}>← {form.pages[activePi-1]?.title||"Prev"}</VBtn>}
+                {activePi<form.pages.length-1&&<VBtn size="sm" style={{background:brand,marginLeft:"auto"}} onClick={()=>{setActivePi(i=>i+1);setActiveSecId(form.pages[activePi+1]?.sections[0]?.id||null);}}>Next: {form.pages[activePi+1]?.title||"Next"} →</VBtn>}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {drawer&&<RequiredDrawer form={form} values={values} notValues={notValues}
+        onValue={onValue} onNotValue={onNotValue}
+        onClose={()=>setDrawer(null)} scope={drawer.scope} scopeId={drawer.scopeId}
+        onJump={(pageId,secId,fieldId)=>{
+          const pi2=form.pages.findIndex(p=>p.id===pageId);
+          if(pi2>=0){ setActivePi(pi2); setActiveSecId(secId); }
+          setDrawer(null);
+        }}/>}
+    </div>
+  );
+}
+
+// ─── PreviewModal: routes to correct layout ────────────────────────────────────
+// ─── PreviewDevBtn: device viewport toggle button for PreviewModal ────────────
+function PreviewDevBtn({ id, viewport, onSetViewport }) {
+  const v = VIEWPORTS[id];
+  const active = viewport === id;
+  return (
+    <button onClick={() => onSetViewport(id)} title={v.label}
+      style={{
+        display:"flex", alignItems:"center", justifyContent:"center",
+        gap:5, padding:"6px 14px",
+        border:`1.5px solid ${active?"#fff":"rgba(255,255,255,0.3)"}`,
+        borderRadius:V.r3,
+        background:active?"rgba(255,255,255,0.18)":"transparent",
+        color:active?"#fff":"rgba(255,255,255,0.6)",
+        cursor:"pointer", fontSize:V.sm, fontFamily:V.font,
+        fontWeight:active?700:400, transition:"all .15s",
+      }}
+      onMouseEnter={e=>{ if(!active){ e.currentTarget.style.background="rgba(255,255,255,0.1)"; e.currentTarget.style.color="#fff"; }}}
+      onMouseLeave={e=>{ if(!active){ e.currentTarget.style.background="transparent"; e.currentTarget.style.color="rgba(255,255,255,0.6)"; }}}
+    >
+      {id==="desktop" && (
+        <svg width="18" height="16" viewBox="0 0 18 16" fill="none">
+          <rect x="1" y="1" width="16" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+          <path d="M6 14h6M9 11v3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+        </svg>
+      )}
+      {id==="tablet" && (
+        <svg width="13" height="17" viewBox="0 0 13 17" fill="none">
+          <rect x="1" y="1" width="11" height="15" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+          <circle cx="6.5" cy="13.5" r="1" fill="currentColor"/>
+        </svg>
+      )}
+      {id==="mobile" && (
+        <svg width="11" height="17" viewBox="0 0 11 17" fill="none">
+          <rect x="1" y="1" width="9" height="15" rx="2.5" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+          <rect x="3.5" y="2.5" width="4" height="1" rx=".5" fill="currentColor" opacity=".5"/>
+          <circle cx="5.5" cy="14" r=".8" fill="currentColor"/>
+        </svg>
+      )}
+      <span>{v.label}</span>
+    </button>
+  );
+}
+
+// ─── PreviewFormComponent: routes PreviewModal to the right layout ────────────
+function PreviewFormComponent({ layout, form, libs, onClose, maxW }) {
+  if (layout === "single-page") return <PreviewSinglePage form={form} libs={libs} onClose={onClose} maxW={maxW}/>;
+  if (layout === "side-nav")    return <PreviewSideNav    form={form} libs={libs} onClose={onClose} maxW={maxW}/>;
+  return <PreviewProgress form={form} libs={libs} onClose={onClose} maxW={maxW}/>;
+}
+
+// ─── renderNarrativePreview: renders a narrative template with token highlights ─
+function renderNarrativePreview(tpl, parseTemplateFn) {
+  if (!tpl) return <span style={{color:V.textDisabled,fontStyle:"italic",fontSize:V.sm}}>Start typing a template above…</span>;
+  const segs = parseTemplateFn ? parseTemplateFn(tpl) : [];
+  return segs.map(function(s, i) {
+    if (s.type === "text") return <span key={i} style={{fontSize:V.sm,color:V.textPrimary,fontFamily:V.font}}>{s.text}</span>;
+    return (
+      <span key={i} style={{display:"inline-flex",alignItems:"center",gap:2,padding:"1px 7px",borderRadius:V.rFull,background:V.primaryLight,border:`1px solid ${V.primary}44`,fontSize:V.xs,fontWeight:700,color:V.primary,fontFamily:"monospace"}}>
+        {s.fieldLabel}
+      </span>
+    );
+  });
+}
+
+// ─── getRightPanelContent: routes the right panel in FormBuilder ──────────────
+function getRightPanelContent(rightPanel, activePage, activePId, selectedFieldData, handleFieldChange, form, setForm, patchPage) {
+  if (rightPanel === "page") return <PageSettingsPanel page={activePage} onChange={function(p) { patchPage(activePId, p); }}/>;
+  if (rightPanel === "form") return <FormSettingsPanel form={form} onChange={setForm}/>;
+  if (selectedFieldData) return <FieldSettingsPanel field={selectedFieldData} onChange={handleFieldChange} libraries={form.libraries||[]}/>;
+  return (
+    <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:V.s3,color:V.textDisabled,padding:V.s6,fontFamily:V.font}}>
+      <div style={{width:48,height:48,borderRadius:V.r5,background:V.bgApp,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,color:V.border}}>←</div>
+      <div style={{fontSize:V.sm,textAlign:"center",color:V.textDisabled,lineHeight:1.5}}>Click a field to<br/>edit its settings</div>
+    </div>
+  );
+}
+
+// ─── Viewport config ──────────────────────────────────────────────────────────
+const VIEWPORTS = {
+  desktop: { icon:"🖥",  label:"Desktop",  w:null,   h:null,   frame:false },
+  tablet:  { icon:"⬜",  label:"Tablet",   w:768,    h:1024,   frame:true,  radius:16 },
+  mobile:  { icon:"📱",  label:"Mobile",   w:390,    h:844,    frame:true,  radius:36 },
+};
+
+function PreviewModal({form,onClose}){
+  const libs = form.libraries||[];
+  const layout = form.settings?.formLayout || "progress";
+  const [viewport, setViewport] = useState("desktop");
+  const vp = VIEWPORTS[viewport];
+  const brand = form.settings?.brandColor || V.primary;
+
+  // Icon SVGs as unicode stand-ins — desktop monitor, tablet, phone
+  // DevBtn → see PreviewDevBtn() top-level
+  // The inner form component constrained to the viewport width
+  // FormComponent → see renderPreviewFormComponent() top-level
+
+  return (
+    <div style={{
+      position:"fixed",inset:0,
+      background:"rgba(18,21,48,0.88)",
+      display:"flex",flexDirection:"column",
+      alignItems:"center",justifyContent:"flex-start",
+      zIndex:3000,backdropFilter:"blur(3px)",
+      paddingTop:V.s3,
+    }}
+      onClick={onClose}
+    >
+      {/* ── Toolbar ── */}
+      <div onClick={e=>e.stopPropagation()}
+        style={{
+          display:"flex",alignItems:"center",gap:V.s4,
+          padding:`${V.s2} ${V.s4}`,
+          marginBottom:V.s3,
+          flexShrink:0,
+        }}
+      >
+        {/* Left: form name */}
+        <div style={{fontSize:V.sm,fontWeight:600,color:"rgba(255,255,255,0.7)",fontFamily:V.font,marginRight:V.s2}}>
+          {form.name}
+        </div>
+
+        {/* Center: device toggle buttons */}
+        <div style={{display:"flex",gap:V.s1,background:"rgba(255,255,255,0.07)",borderRadius:V.r4,padding:3}}>
+          <PreviewDevBtn id="desktop" viewport={viewport} onSetViewport={setViewport}/>
+          <PreviewDevBtn id="tablet"  viewport={viewport} onSetViewport={setViewport}/>
+          <PreviewDevBtn id="mobile"  viewport={viewport} onSetViewport={setViewport}/>
+        </div>
+
+        {/* Right: viewport label + close */}
+        <div style={{marginLeft:V.s2,fontSize:V.xs,color:"rgba(255,255,255,0.45)",fontFamily:V.font,minWidth:80}}>
+          {vp.w ? `${vp.w} × ${vp.h}` : "Full width"}
+        </div>
+        <button onClick={onClose}
+          style={{background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.2)",color:"#fff",width:28,height:28,borderRadius:"50%",cursor:"pointer",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",marginLeft:V.s2}}
+          onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.25)"}
+          onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.12)"}>×</button>
+      </div>
+
+      {/* ── Device frame + form ── */}
+      <div onClick={e=>e.stopPropagation()}
+        style={{
+          flex:1,
+          display:"flex",alignItems:"flex-start",justifyContent:"center",
+          width:"100%",
+          overflow:"auto",
+          paddingBottom:V.s5,
+        }}
+      >
+        {vp.frame ? (
+          /* Device frame wrapper */
+          <div style={{
+            width: vp.w + 24,
+            flexShrink:0,
+            background:"#1a1a2e",
+            borderRadius: vp.radius + 8,
+            padding:12,
+            boxShadow:"0 0 0 2px #333, 0 20px 60px rgba(0,0,0,0.6), inset 0 0 0 1px #444",
+            position:"relative",
+          }}>
+            {/* Status bar (mobile only) */}
+            {viewport==="mobile" && (
+              <div style={{
+                display:"flex",alignItems:"center",justifyContent:"space-between",
+                padding:"6px 20px 4px",
+                color:"rgba(255,255,255,0.7)",fontSize:10,fontFamily:V.font,
+              }}>
+                <span style={{fontWeight:600}}>9:41</span>
+                <div style={{width:90,height:14,background:"#1a1a2e",borderRadius:20,border:"2px solid #333",margin:"0 auto",position:"absolute",left:"50%",transform:"translateX(-50%)",top:8}}/>
+                <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                  <span>●●●</span><span>WiFi</span><span>100%</span>
+                </div>
+              </div>
+            )}
+            {/* Screen */}
+            <div style={{
+              width: vp.w,
+              height: vp.h - (viewport==="mobile"?60:40),
+              borderRadius: vp.radius - 4,
+              overflow:"hidden",
+              background:V.bgApp,
+              position:"relative",
+            }}>
+              <div style={{width:"100%",height:"100%",overflowY:"auto",overflowX:"hidden"}}>
+                <PreviewFormComponent layout={layout} form={form} libs={libs} onClose={onClose} maxW={vp.w}/>
+              </div>
+            </div>
+            {/* Home indicator (mobile) */}
+            {viewport==="mobile" && (
+              <div style={{display:"flex",justifyContent:"center",paddingTop:8}}>
+                <div style={{width:100,height:4,background:"rgba(255,255,255,0.3)",borderRadius:2}}/>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Desktop: no frame, just center the form card */
+          <FormComponent/>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Narrative helpers ───────────────────────────────────────────────────────
+// Collect all fields from a form into a flat list with section/page context
+function collectFields(form) {
+  const result = [];
+  (form.pages||[]).forEach(page => {
+    (page.sections||[]).forEach(sec => {
+      (sec.rows||[]).forEach(row => {
+        (row.cells||[]).forEach(cell => {
+          (cell.fields||[]).filter(f=>!["description","divider"].includes(f.type)).forEach(f => {
+            result.push({ field:f, sectionTitle:sec.title, pageTitle:page.title });
+          });
+        });
+      });
+    });
+  });
+  return result;
+}
+
+// Parse a template string into segments: [{type:"text",text} | {type:"token",fieldId,fieldLabel}]
+function parseTemplate(tpl) {
+  const segs = [];
+  const re = /\{\{([^}]+)\}\}/g;
+  let last = 0, m;
+  while ((m = re.exec(tpl)) !== null) {
+    if (m.index > last) segs.push({type:"text", text:tpl.slice(last, m.index)});
+    const [fieldId, ...rest] = m[1].split("|");
+    segs.push({type:"token", fieldId:fieldId.trim(), fieldLabel:rest.join("|").trim()||fieldId.trim()});
+    last = m.index + m[0].length;
+  }
+  if (last < tpl.length) segs.push({type:"text", text:tpl.slice(last)});
+  return segs;
+}
+
+function segmentsToTemplate(segs) {
+  return segs.map(s => s.type==="text" ? s.text : `{{${s.fieldId}|${s.fieldLabel}}}`).join("");
+}
+
+// ─── Narrative Builder Modal ──────────────────────────────────────────────────
+function NarrativeBuilder({ form, onUpdateTemplates, onClose }) {
+  const [templates, setTemplates] = useState(form.narrativeTemplates||[{id:uid(),name:"Narrative 1",template:""}]);
+  const [activeId, setActiveId] = useState((form.narrativeTemplates||[])[0]?.id || null);
+  const [dragToken, setDragToken] = useState(null); // {fieldId, fieldLabel}
+  const [caretPos, setCaretPos]   = useState(null);
+  const textareaRef = useRef(null);
+
+  const allFields = collectFields(form);
+  // Group by section
+  const groups = [];
+  allFields.forEach(({field, sectionTitle, pageTitle}) => {
+    const key = pageTitle + " › " + sectionTitle;
+    let g = groups.find(g => g.key === key);
+    if (!g) { g = {key, label:sectionTitle, pageTitle, items:[]}; groups.push(g); }
+    g.items.push({field, sectionTitle, pageTitle});
+  });
+
+  const activeTemplate = templates.find(t => t.id === activeId) || templates[0];
+  const updActive = patch => {
+    const updated = templates.map(t => t.id === activeTemplate?.id ? {...t,...patch} : t);
+    setTemplates(updated);
+    onUpdateTemplates(updated);
+  };
+
+  const addTemplate = () => {
+    const t = {id:uid(), name:`Narrative ${templates.length+1}`, template:""};
+    const next = [...templates, t];
+    setTemplates(next); setActiveId(t.id); onUpdateTemplates(next);
+  };
+  const deleteTemplate = id => {
+    const next = templates.filter(t=>t.id!==id);
+    setTemplates(next); onUpdateTemplates(next);
+    if (activeId===id) setActiveId(next[0]?.id||null);
+  };
+
+  // Insert token at cursor position in textarea
+  const insertToken = (fieldId, fieldLabel) => {
+    const ta = textareaRef.current;
+    if (!ta || !activeTemplate) return;
+    const token = `{{${fieldId}|${fieldLabel}}}`;
+    const pos = ta.selectionStart ?? (activeTemplate.template||"").length;
+    const t = activeTemplate.template||"";
+    const next = t.slice(0,pos) + token + t.slice(pos);
+    updActive({template:next});
+    // Restore caret after react re-render
+    setTimeout(() => { if(ta){ ta.selectionStart = ta.selectionEnd = pos + token.length; ta.focus(); } }, 10);
+  };
+
+  const handleDragStart = (e, fieldId, fieldLabel) => {
+    setDragToken({fieldId, fieldLabel});
+    e.dataTransfer.effectAllowed = "copy";
+    e.dataTransfer.setData("text/plain", `{{${fieldId}|${fieldLabel}}}`);
+  };
+  const handleDropOnCanvas = e => {
+    e.preventDefault();
+    if (!dragToken || !activeTemplate) return;
+    // drop at caret if available, else append
+    const ta = textareaRef.current;
+    const token = `{{${dragToken.fieldId}|${dragToken.fieldLabel}}}`;
+    if (ta) {
+      const pos = caretPos ?? (activeTemplate.template||"").length;
+      const t = activeTemplate.template||"";
+      updActive({template: t.slice(0,pos) + token + t.slice(pos)});
+      setTimeout(()=>{ if(ta){ ta.selectionStart=ta.selectionEnd=pos+token.length; ta.focus(); } },10);
+    } else {
+      updActive({template:(activeTemplate.template||"") + token});
+    }
+    setDragToken(null);
+  };
+
+  // Rendered preview of the template with highlighted tokens
+  // renderPreview → see renderNarrativePreview() top-level
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(28,31,59,0.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:4000,backdropFilter:"blur(2px)"}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:V.bgSurface,borderRadius:V.r5,width:"min(1000px,97vw)",height:"min(680px,94vh)",display:"flex",flexDirection:"column",boxShadow:V.shadow3,overflow:"hidden",fontFamily:V.font}}>
+
+        {/* Header */}
+        <div style={{padding:`${V.s3} ${V.s5}`,borderBottom:`1px solid ${V.borderLight}`,display:"flex",alignItems:"center",gap:V.s3,flexShrink:0,background:V.bgApp}}>
+          <div style={{width:34,height:34,borderRadius:V.r3,background:V.primaryBg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>✍</div>
+          <div style={{flex:1}}>
+            <div style={{fontWeight:700,fontSize:V.lg,color:V.textPrimary}}>Narrative Builder</div>
+            <div style={{fontSize:V.sm,color:V.textSecondary}}>Drag field tokens into your template. Each field uses its Narrative Text setting when generating.</div>
+          </div>
+          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:V.textDisabled,fontSize:20,lineHeight:1,padding:V.s2}} onMouseEnter={e=>e.target.style.color=V.negative} onMouseLeave={e=>e.target.style.color=V.textDisabled}>×</button>
+        </div>
+
+        <div style={{display:"flex",flex:1,overflow:"hidden"}}>
+
+          {/* Left: Template list */}
+          <div style={{width:188,borderRight:`1px solid ${V.borderLight}`,display:"flex",flexDirection:"column",flexShrink:0}}>
+            <div style={{padding:`${V.s2} ${V.s3}`,borderBottom:`1px solid ${V.borderLight}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <span style={{fontSize:V.xs,fontWeight:700,color:V.textDisabled,textTransform:"uppercase",letterSpacing:".08em"}}>Templates</span>
+              <button onClick={addTemplate} style={{background:V.primary,border:"none",color:"#fff",width:20,height:20,borderRadius:V.r2,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>+</button>
+            </div>
+            <div style={{overflowY:"auto",flex:1}}>
+              {templates.map(t=>(
+                <div key={t.id} onClick={()=>setActiveId(t.id)} style={{display:"flex",alignItems:"center",gap:V.s2,padding:`${V.s3} ${V.s3}`,cursor:"pointer",background:activeId===t.id?V.bgSelected:"transparent",borderBottom:`1px solid ${V.borderLight}`,transition:"background .1s"}} onMouseEnter={e=>{if(activeId!==t.id)e.currentTarget.style.background=V.bgHover;}} onMouseLeave={e=>{if(activeId!==t.id)e.currentTarget.style.background="transparent";}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:V.sm,fontWeight:activeId===t.id?700:500,color:activeId===t.id?V.primary:V.textPrimary,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.name||"Untitled"}</div>
+                    <div style={{fontSize:V.xs,color:V.textDisabled}}>{parseTemplate(t.template||"").filter(s=>s.type==="token").length} tokens</div>
+                  </div>
+                  {templates.length>1&&<button onClick={e=>{e.stopPropagation();deleteTemplate(t.id);}} style={{background:"none",border:"none",cursor:"pointer",color:V.textDisabled,fontSize:13,padding:0,lineHeight:1,flexShrink:0}} onMouseEnter={e=>e.target.style.color=V.negative} onMouseLeave={e=>e.target.style.color=V.textDisabled}>×</button>}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Center: Canvas */}
+          <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",borderRight:`1px solid ${V.borderLight}`}}>
+            {activeTemplate && <>
+              {/* Template name */}
+              <div style={{padding:`${V.s2} ${V.s4}`,borderBottom:`1px solid ${V.borderLight}`,display:"flex",alignItems:"center",gap:V.s3,background:V.bgApp,flexShrink:0}}>
+                <input value={activeTemplate.name||""} onChange={e=>updActive({name:e.target.value})} style={{fontSize:V.md,fontWeight:700,color:V.textPrimary,border:"none",background:"none",outline:"none",flex:1,fontFamily:V.font}} placeholder="Template name…"/>
+                <span style={{fontSize:V.xs,color:V.textDisabled,fontFamily:V.font,flexShrink:0}}>
+                  {parseTemplate(activeTemplate.template||"").filter(s=>s.type==="token").length} field tokens · {(activeTemplate.template||"").length} chars
+                </span>
+              </div>
+
+              {/* Editor textarea */}
+              <div style={{padding:V.s4,borderBottom:`1px solid ${V.borderLight}`,flexShrink:0,background:V.bgSurface}}
+                onDragOver={e=>{e.preventDefault();e.currentTarget.style.background=V.bgSelected;}}
+                onDragLeave={e=>e.currentTarget.style.background=V.bgSurface}
+                onDrop={e=>{e.currentTarget.style.background=V.bgSurface;handleDropOnCanvas(e);}}>
+                <div style={{fontSize:V.xs,fontWeight:700,color:V.textDisabled,textTransform:"uppercase",letterSpacing:".08em",marginBottom:V.s2}}>
+                  Template — drop tokens from the right panel or type <code style={{background:V.bgHover,padding:"0 3px",borderRadius:2,fontSize:9,color:V.primary}}>{"{{fieldId|Label}}"}</code>
+                </div>
+                <textarea
+                  ref={textareaRef}
+                  value={activeTemplate.template||""}
+                  onChange={e=>updActive({template:e.target.value})}
+                  onSelect={e=>setCaretPos(e.target.selectionStart)}
+                  onKeyUp={e=>setCaretPos(e.target.selectionStart)}
+                  onClick={e=>setCaretPos(e.target.selectionStart)}
+                  rows={5}
+                  style={{...{width:"100%",padding:"8px 10px",fontSize:V.sm,border:`1px solid ${V.borderLight}`,borderRadius:V.r3,background:V.bgApp,color:V.textPrimary,outline:"none",fontFamily:"monospace",resize:"vertical",boxSizing:"border-box"}} }
+                  placeholder="Type your narrative template here. Drag field tokens from the right panel, or click a token to insert at cursor."
+                  onFocus={e=>{e.target.style.borderColor=V.borderFocus;e.target.style.boxShadow=`0 0 0 3px ${V.primaryLight}`;}}
+                  onBlur={e=>{e.target.style.borderColor=V.borderLight;e.target.style.boxShadow="none";}}
+                />
+              </div>
+
+              {/* Rendered preview */}
+              <div style={{flex:1,overflowY:"auto",padding:V.s4}}>
+                <div style={{fontSize:V.xs,fontWeight:700,color:V.textDisabled,textTransform:"uppercase",letterSpacing:".08em",marginBottom:V.s3}}>Preview</div>
+                <div style={{background:V.bgApp,border:`1px solid ${V.borderLight}`,borderRadius:V.r3,padding:V.s4,lineHeight:1.8,minHeight:60}}>
+                  {renderNarrativePreview(activeTemplate.template, parseTemplate)}
+                </div>
+                <div style={{marginTop:V.s4}}>
+                  <div style={{fontSize:V.xs,fontWeight:700,color:V.textDisabled,textTransform:"uppercase",letterSpacing:".08em",marginBottom:V.s2}}>NOT-Value Preview</div>
+                  <div style={{background:"#fff5f5",border:`1px solid ${V.negative}33`,borderRadius:V.r3,padding:V.s4,lineHeight:1.8,minHeight:60}}>
+                    {renderNarrativePreview(activeTemplate.template?.replace(/\{\{([^}|]+, parseTemplate)\|([^}]+)\}\}/g,(m,id,lbl)=>`{{${id}|[NOT: ${lbl}]}}`))}
+                  </div>
+                  <div style={{fontSize:V.xs,color:V.textDisabled,marginTop:V.s1,fontFamily:V.font}}>Tokens show "Not Value Text" when a respondent selects a NOT value or PN.</div>
+                </div>
+              </div>
+            </>}
+          </div>
+
+          {/* Right: Field token browser */}
+          <div style={{width:240,display:"flex",flexDirection:"column",overflow:"hidden",flexShrink:0}}>
+            <div style={{padding:`${V.s2} ${V.s3}`,borderBottom:`1px solid ${V.borderLight}`,background:V.bgApp}}>
+              <div style={{fontSize:V.xs,fontWeight:700,color:V.textDisabled,textTransform:"uppercase",letterSpacing:".08em"}}>Field Tokens</div>
+              <div style={{fontSize:V.xs,color:V.textSecondary,marginTop:2,fontFamily:V.font}}>Drag or click to insert</div>
+            </div>
+            <div style={{overflowY:"auto",flex:1,padding:V.s2}}>
+              {allFields.length===0 && <div style={{padding:V.s4,textAlign:"center",color:V.textDisabled,fontSize:V.xs,fontFamily:V.font}}>Add fields to the form to see tokens here.</div>}
+              {groups.map(g=>(
+                <div key={g.key} style={{marginBottom:V.s3}}>
+                  <div style={{fontSize:V.xs,fontWeight:700,color:V.textSecondary,textTransform:"uppercase",letterSpacing:".06em",padding:`${V.s1} ${V.s2}`,display:"flex",alignItems:"center",gap:5}}>
+                    <span style={{fontSize:9,opacity:.6}}>{g.pageTitle} ›</span> {g.label}
+                  </div>
+                  {g.items.map(({field})=>{
+                    const ft = FIELD_TYPES.find(f=>f.type===field.type);
+                    const cat = CAT[ft?.category||"basic"];
+                    const hasNarr = !!(field.narrative?.valueText);
+                    const fieldKey = (field.libraryRows||[])[0]?.exportKey || field.id;
+                    return (
+                      <div key={field.id}
+                        draggable
+                        onDragStart={e=>handleDragStart(e, fieldKey, field.label)}
+                        onClick={()=>insertToken(fieldKey, field.label)}
+                        style={{display:"flex",alignItems:"center",gap:V.s2,padding:`${V.s2} ${V.s2}`,borderRadius:V.r3,cursor:"grab",marginBottom:3,border:`1px solid ${V.borderLight}`,background:V.bgSurface,transition:"all .12s",userSelect:"none"}}
+                        onMouseEnter={e=>{e.currentTarget.style.background=V.bgSelected;e.currentTarget.style.borderColor=V.primary;}}
+                        onMouseLeave={e=>{e.currentTarget.style.background=V.bgSurface;e.currentTarget.style.borderColor=V.borderLight;}}>
+                        <div style={{width:20,height:20,borderRadius:V.r2,background:cat.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:cat.text,flexShrink:0}}>{ft?.icon}</div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:V.xs,fontWeight:600,color:V.textPrimary,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontFamily:V.font}}>{field.label}</div>
+                          <code style={{fontSize:9,color:V.textDisabled,display:"block",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fieldKey}</code>
+                        </div>
+                        {hasNarr && <span title="Has narrative text" style={{fontSize:9,color:V.positive,flexShrink:0}}>✍</span>}
+                        <span style={{color:V.textDisabled,fontSize:10,flexShrink:0}}>⠿</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div style={{padding:`${V.s3} ${V.s5}`,borderTop:`1px solid ${V.borderLight}`,display:"flex",gap:V.s2,justifyContent:"flex-end",background:V.bgApp,flexShrink:0}}>
+          <VBtn variant="secondary" size="sm" onClick={()=>{if(activeTemplate)navigator.clipboard?.writeText(activeTemplate.template||"");}}>Copy Template</VBtn>
+          <VBtn size="sm" onClick={onClose}>Done</VBtn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── FormSettings sub-components (must be top-level for Babel JSX) ───────────
+function FSSSection({ children }) {
+  return (
+    <div style={{ flex:1, overflowY:"auto", padding:`${V.s6} ${V.s6}` }}>
+      {children}
+    </div>
+  );
+}
+function FSSField({ label, hint, children }) {
+  return (
+    <div style={{ marginBottom:V.s5 }}>
+      <VLabel>{label}</VLabel>
+      {children}
+      {hint && <div style={{ fontSize:V.xs, color:V.textDisabled, marginTop:V.s1, fontFamily:V.font, lineHeight:1.5 }}>{hint}</div>}
+    </div>
+  );
+}
+function FSSGroup({ title, desc, children }) {
+  return (
+    <div style={{ marginBottom:V.s6, paddingBottom:V.s6, borderBottom:`1px solid ${V.borderLight}` }}>
+      <div style={{ marginBottom:V.s4 }}>
+        <div style={{ fontSize:V.lg, fontWeight:700, color:V.textPrimary, fontFamily:V.font, marginBottom:4 }}>{title}</div>
+        {desc && <div style={{ fontSize:V.sm, color:V.textSecondary, fontFamily:V.font }}>{desc}</div>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ─── Form Settings Page ──────────────────────────────────────────────────────
+const SETTINGS_SECTIONS = [
+  { id:"general",     icon:"⚙",  label:"General",          desc:"Name, description, slug" },
+  { id:"submission",  icon:"✉",  label:"Submission",       desc:"Button, success message, redirect" },
+  { id:"display",     icon:"🎨", label:"Display & Theme",  desc:"Progress bar, layout, branding" },
+  { id:"behavior",    icon:"⚡", label:"Behavior",         desc:"Drafts, autosave, validation" },
+  { id:"access",      icon:"🔒", label:"Access & Sharing", desc:"Visibility, password, embed" },
+  { id:"integrations",icon:"🔗", label:"Integrations",     desc:"monday.com boards, webhooks" },
+  { id:"notifications",icon:"🔔",label:"Notifications",    desc:"Email alerts, confirmations" },
+  { id:"data",        icon:"📊", label:"Data & Export",    desc:"Key mapping, libraries, export format" },
+];
+
+function FormSettingsPage({ form, onChange, onBack }) {
+  const [activeSection, setActiveSection] = useState("general");
+  const s = form.settings || {};
+  const setS = p => onChange({ ...form, settings: { ...s, ...p } });
+
+  const panels = {
+    general: (
+      <FSSSection>
+        <FSSGroup title="Form Identity" desc="How your form is identified and described.">
+          <FSSField label="Form Name">
+            <VInput value={form.name||""} onChange={e=>onChange({...form,name:e.target.value})} placeholder="Untitled Form"/>
+          </FSSField>
+          <FSSField label="Description" hint="Shown at the top of the form when respondents open it.">
+            <VTA value={form.description||""} onChange={e=>onChange({...form,description:e.target.value})} rows={4} placeholder="Describe what this form is for…"/>
+          </FSSField>
+          <FSSField label="Internal Notes" hint="Only visible to form builders — never shown to respondents.">
+            <VTA value={form.notes||""} onChange={e=>onChange({...form,notes:e.target.value})} rows={3} placeholder="Notes, instructions for other editors…"/>
+          </FSSField>
+        </FSSGroup>
+        <FSSGroup title="Identifiers" desc="Used for export key namespacing and API integrations.">
+          <FSSField label="Form ID" hint="Auto-generated. Used as the root namespace in key exports.">
+            <VInput value={form.id||""} disabled style={{background:V.bgApp,color:V.textDisabled,cursor:"not-allowed"}}/>
+          </FSSField>
+          <FSSField label="Form Slug" hint="Short identifier used in URLs and export paths.">
+            <VInput value={form.slug||form.name?.toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,"")||""} onChange={e=>onChange({...form,slug:e.target.value})} placeholder="my-form-name"/>
+          </FSSField>
+        </FSSGroup>
+      </FSSSection>
+    ),
+
+    submission: (
+      <FSSSection>
+        <FSSGroup title="Submit Button" desc="Customize what the respondent sees when submitting.">
+          <FSSField label="Button Label">
+            <VInput value={s.submitLabel||"Submit"} onChange={e=>setS({submitLabel:e.target.value})} placeholder="Submit"/>
+          </FSSField>
+        </FSSGroup>
+        <FSSGroup title="After Submission" desc="What happens when the form is submitted successfully.">
+          <FSSField label="Success Message" hint="Shown after submission. Leave redirect URL blank to display this.">
+            <VTA value={s.successMessage||""} onChange={e=>setS({successMessage:e.target.value})} rows={4} placeholder="Thank you! Your response has been submitted."/>
+          </FSSField>
+          <FSSField label="Redirect URL" hint="If set, respondent is redirected here after submission instead of showing the success message.">
+            <VInput value={s.redirectUrl||""} onChange={e=>setS({redirectUrl:e.target.value})} placeholder="https://example.com/thank-you"/>
+          </FSSField>
+        </FSSGroup>
+        <FSSGroup title="Confirmation Email">
+          <div style={{ display:"flex", flexDirection:"column", gap:V.s3 }}>
+            <VToggle checked={!!s.sendConfirmation} onChange={v=>setS({sendConfirmation:v})} label="Send confirmation email to respondent"/>
+            {s.sendConfirmation && <>
+              <FSSField label="Reply-to Email" hint="Where respondents can reply to.">
+                <VInput value={s.confirmationReplyTo||""} onChange={e=>setS({confirmationReplyTo:e.target.value})} placeholder="noreply@yourorganization.com"/>
+              </FSSField>
+              <FSSField label="Confirmation Subject">
+                <VInput value={s.confirmationSubject||""} onChange={e=>setS({confirmationSubject:e.target.value})} placeholder="Your form submission was received"/>
+              </FSSField>
+            </>}
+          </div>
+        </FSSGroup>
+      </FSSSection>
+    ),
+
+    display: (
+      <FSSSection>
+        <FSSGroup title="Form Layout" desc="Choose how respondents navigate and experience the form.">
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:V.s3, marginBottom:V.s4 }}>
+            {[
+              { id:"progress", label:"Progress Form", icon:"→",
+                desc:"Pages shown one at a time with a top progress bar and Prev/Next navigation.",
+                preview: (
+                  <div style={{ background:V.bgApp, borderRadius:V.r2, overflow:"hidden", border:`1px solid ${V.borderLight}` }}>
+                    <div style={{ height:4, background:V.primary, width:"40%" }}/>
+                    <div style={{ padding:"6px 8px" }}>
+                      <div style={{ height:5, background:V.borderLight, borderRadius:2, marginBottom:4, width:"70%" }}/>
+                      <div style={{ height:3, background:V.borderLight, borderRadius:2, marginBottom:2 }}/>
+                      <div style={{ height:3, background:V.borderLight, borderRadius:2, width:"80%" }}/>
+                    </div>
+                    <div style={{ padding:"4px 8px", display:"flex", justifyContent:"flex-end" }}>
+                      <div style={{ width:28, height:10, background:V.primary, borderRadius:2 }}/>
+                    </div>
+                  </div>
+                )
+              },
+              { id:"single-page", label:"Single Page", icon:"☰",
+                desc:"All pages shown on one scrollable page. Pages collapse/expand like accordion sections.",
+                preview: (
+                  <div style={{ background:V.bgApp, borderRadius:V.r2, overflow:"hidden", border:`1px solid ${V.borderLight}`, padding:"6px 8px" }}>
+                    {[1,2,3].map(i=>(
+                      <div key={i} style={{ marginBottom:4 }}>
+                        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:i===1?V.primaryLight:V.bgSurface, borderRadius:V.r2, padding:"3px 6px", border:`1px solid ${i===1?V.primary+"33":V.borderLight}` }}>
+                          <div style={{ width:i===1?40:30, height:3, background:i===1?V.primary:V.border, borderRadius:2 }}/>
+                          <div style={{ fontSize:8, color:i===1?V.primary:V.textDisabled }}>{i===1?"▲":"▼"}</div>
+                        </div>
+                        {i===1&&<div style={{ padding:"3px 6px" }}><div style={{ height:3, background:V.borderLight, borderRadius:2, marginBottom:2 }}/><div style={{ height:3, background:V.borderLight, borderRadius:2, width:"70%" }}/></div>}
+                      </div>
+                    ))}
+                  </div>
+                )
+              },
+              { id:"side-nav", label:"Side Navigation", icon:"◫",
+                desc:"Left sidebar shows all pages and sections. Respondents jump directly to any section.",
+                preview: (
+                  <div style={{ background:V.bgApp, borderRadius:V.r2, overflow:"hidden", border:`1px solid ${V.borderLight}`, display:"flex", height:52 }}>
+                    <div style={{ width:36, background:V.sidebarBg, padding:"4px 5px", display:"flex", flexDirection:"column", gap:2 }}>
+                      {[1,2,3].map(i=><div key={i} style={{ height:4, background:i===1?"rgba(255,255,255,0.7)":"rgba(255,255,255,0.25)", borderRadius:2 }}/>)}
+                    </div>
+                    <div style={{ flex:1, padding:"5px 7px" }}>
+                      <div style={{ height:4, background:V.borderLight, borderRadius:2, marginBottom:3, width:"80%" }}/>
+                      <div style={{ height:3, background:V.borderLight, borderRadius:2, marginBottom:2 }}/>
+                      <div style={{ height:3, background:V.borderLight, borderRadius:2, width:"60%" }}/>
+                    </div>
+                  </div>
+                )
+              },
+            ].map(opt=>{
+              const isActive = (s.formLayout||"progress") === opt.id;
+              return (
+                <button key={opt.id} onClick={()=>setS({formLayout:opt.id})}
+                  style={{ textAlign:"left", background:isActive?V.bgSurface:"#fff", border:`2px solid ${isActive?V.primary:V.borderLight}`, borderRadius:V.r4, padding:V.s3, cursor:"pointer", transition:"all .15s", boxShadow:isActive?`0 0 0 3px ${V.primaryLight}`:V.shadow1, fontFamily:V.font }}>
+                  <div style={{ marginBottom:V.s2 }}>{opt.preview}</div>
+                  <div style={{ display:"flex", alignItems:"center", gap:V.s1, marginBottom:4 }}>
+                    <span style={{ fontSize:12, color:isActive?V.primary:V.textSecondary }}>{opt.icon}</span>
+                    <span style={{ fontSize:V.sm, fontWeight:700, color:isActive?V.primary:V.textPrimary }}>{opt.label}</span>
+                    {isActive&&<span style={{ marginLeft:"auto", fontSize:9, padding:"1px 6px", borderRadius:V.rFull, background:V.primary, color:"#fff", fontWeight:700 }}>Active</span>}
+                  </div>
+                  <div style={{ fontSize:V.xs, color:V.textSecondary, lineHeight:1.4 }}>{opt.desc}</div>
+                </button>
+              );
+            })}
+          </div>
+          {(s.formLayout==="progress"||!s.formLayout)&&(
+            <div style={{ display:"flex", flexDirection:"column", gap:V.s3, padding:V.s3, background:V.bgApp, borderRadius:V.r3, border:`1px solid ${V.borderLight}` }}>
+              <VToggle checked={!!s.showProgress} onChange={v=>setS({showProgress:v})} label="Show progress bar"/>
+              <VToggle checked={!!s.showPageNumbers} onChange={v=>setS({showPageNumbers:v})} label="Show page numbers (e.g. Page 1 of 3)"/>
+            </div>
+          )}
+          {s.formLayout==="single-page"&&(
+            <div style={{ display:"flex", flexDirection:"column", gap:V.s3, padding:V.s3, background:V.bgApp, borderRadius:V.r3, border:`1px solid ${V.borderLight}` }}>
+              <VToggle checked={s.singlePageDefaultExpanded!==false} onChange={v=>setS({singlePageDefaultExpanded:v})} label="Expand first page by default"/>
+              <VToggle checked={!!s.singlePageAllowMultiOpen} onChange={v=>setS({singlePageAllowMultiOpen:v})} label="Allow multiple sections open at once"/>
+            </div>
+          )}
+          {s.formLayout==="side-nav"&&(
+            <div style={{ display:"flex", flexDirection:"column", gap:V.s3, padding:V.s3, background:V.bgApp, borderRadius:V.r3, border:`1px solid ${V.borderLight}` }}>
+              <VToggle checked={!!s.showSectionTitles} onChange={v=>setS({showSectionTitles:v})} label="Show section titles in nav"/>
+              <VToggle checked={!!s.sideNavShowProgress} onChange={v=>setS({sideNavShowProgress:v})} label="Show completion indicators in nav"/>
+            </div>
+          )}
+        </FSSGroup>
+        <FSSGroup title="Branding">
+          <FSSField label="Primary Color" hint="Used for buttons, progress bar, and accents.">
+            <div style={{ display:"flex", alignItems:"center", gap:V.s3 }}>
+              <input type="color" value={s.brandColor||"#0073EA"} onChange={e=>setS({brandColor:e.target.value})}
+                style={{ width:40, height:32, border:`1px solid ${V.border}`, borderRadius:V.r2, cursor:"pointer", padding:2 }}/>
+              <VInput value={s.brandColor||"#0073EA"} onChange={e=>setS({brandColor:e.target.value})} style={{ width:120 }}/>
+              <button onClick={()=>setS({brandColor:"#0073EA"})} style={{ background:"none", border:`1px solid ${V.borderLight}`, borderRadius:V.r2, cursor:"pointer", fontSize:V.xs, color:V.textSecondary, padding:"5px 10px", fontFamily:V.font }}>Reset</button>
+            </div>
+          </FSSField>
+          <FSSField label="Logo URL" hint="Optional logo shown in the form header.">
+            <VInput value={s.logoUrl||""} onChange={e=>setS({logoUrl:e.target.value})} placeholder="https://…/logo.png"/>
+          </FSSField>
+        </FSSGroup>
+        <FSSGroup title="Options">
+          <div style={{ display:"flex", flexDirection:"column", gap:V.s3 }}>
+            <VToggle checked={!!s.compactMode} onChange={v=>setS({compactMode:v})} label="Compact mode — reduce field spacing"/>
+          </div>
+        </FSSGroup>
+      </FSSSection>
+    ),
+
+    behavior: (
+      <FSSSection>
+        <FSSGroup title="Drafts & Auto-save">
+          <div style={{ display:"flex", flexDirection:"column", gap:V.s3 }}>
+            <VToggle checked={!!s.allowDraft} onChange={v=>setS({allowDraft:v})} label="Allow respondents to save and resume later"/>
+            <VToggle checked={!!s.autosave} onChange={v=>setS({autosave:v})} label="Auto-save responses as respondent types"/>
+          </div>
+        </FSSGroup>
+        <FSSGroup title="Validation & Submission">
+          <div style={{ display:"flex", flexDirection:"column", gap:V.s3 }}>
+            <VToggle checked={!!s.validateOnChange} onChange={v=>setS({validateOnChange:v})} label="Validate fields on change (not just on submit)"/>
+            <VToggle checked={!!s.preventMultipleSubmissions} onChange={v=>setS({preventMultipleSubmissions:v})} label="Prevent multiple submissions from same device"/>
+            <VToggle checked={!!s.requireAllPages} onChange={v=>setS({requireAllPages:v})} label="Require all pages to be completed before submitting"/>
+          </div>
+        </FSSGroup>
+        <FSSGroup title="Navigation">
+          <div style={{ display:"flex", flexDirection:"column", gap:V.s3 }}>
+            <VToggle checked={!!s.allowBackNavigation !== false} onChange={v=>setS({allowBackNavigation:v})} label="Allow respondents to go back to previous pages"/>
+            <VToggle checked={!!s.shufflePages} onChange={v=>setS({shufflePages:v})} label="Randomize page order"/>
+            <VToggle checked={!!s.shuffleFields} onChange={v=>setS({shuffleFields:v})} label="Randomize field order within sections"/>
+          </div>
+        </FSSGroup>
+      </FSSSection>
+    ),
+
+    access: (
+      <FSSSection>
+        <FSSGroup title="Visibility">
+          <FSSField label="Form Status">
+            <div style={{ display:"flex", gap:V.s2 }}>
+              {[["draft","Draft"],["active","Active"],["closed","Closed"]].map(([val,lbl])=>(
+                <button key={val} onClick={()=>setS({status:val})}
+                  style={{ padding:"6px 16px", border:`1.5px solid ${s.status===val?V.primary:V.border}`, borderRadius:V.r2, background:s.status===val?V.primaryLight:"#fff", color:s.status===val?V.primary:V.textSecondary, fontSize:V.sm, cursor:"pointer", fontFamily:V.font, fontWeight:s.status===val?700:400 }}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize:V.xs, color:V.textDisabled, marginTop:V.s1, fontFamily:V.font }}>
+              {s.status==="closed" ? "Form is closed — respondents will see a closed message." : s.status==="draft" ? "Form is in draft — not visible to respondents." : "Form is active and accepting responses."}
+            </div>
+          </FSSField>
+          <FSSField label="Closed Form Message" hint="Shown when the form status is Closed.">
+            <VInput value={s.closedMessage||""} onChange={e=>setS({closedMessage:e.target.value})} placeholder="This form is no longer accepting responses."/>
+          </FSSField>
+        </FSSGroup>
+        <FSSGroup title="Password Protection">
+          <VToggle checked={!!s.passwordProtected} onChange={v=>setS({passwordProtected:v})} label="Require a password to open this form"/>
+          {s.passwordProtected && (
+            <div style={{ marginTop:V.s3 }}>
+              <FSSField label="Password">
+                <VInput type="password" value={s.formPassword||""} onChange={e=>setS({formPassword:e.target.value})} placeholder="Enter password…"/>
+              </FSSField>
+            </div>
+          )}
+        </FSSGroup>
+        <FSSGroup title="Embed">
+          <FSSField label="Allowed Domains" hint="Comma-separated domains that may embed this form. Leave blank to allow all.">
+            <VInput value={s.allowedDomains||""} onChange={e=>setS({allowedDomains:e.target.value})} placeholder="example.com, app.example.com"/>
+          </FSSField>
+        </FSSGroup>
+      </FSSSection>
+    ),
+
+    integrations: (
+      <FSSSection>
+        <FSSGroup title="monday.com Board" desc="Connect this form to a monday.com board for automatic item creation on submission.">
+          <FSSField label="Target Board ID" hint="The monday.com board ID where form submissions will create new items.">
+            <VInput value={s.mondayBoardId||""} onChange={e=>setS({mondayBoardId:e.target.value})} placeholder="e.g. 1234567890"/>
+          </FSSField>
+          <FSSField label="Target Group ID" hint="Optional. Adds new items to a specific group within the board.">
+            <VInput value={s.mondayGroupId||""} onChange={e=>setS({mondayGroupId:e.target.value})} placeholder="e.g. new_group"/>
+          </FSSField>
+          <div style={{ display:"flex", flexDirection:"column", gap:V.s3 }}>
+            <VToggle checked={!!s.createLabelsIfMissing} onChange={v=>setS({createLabelsIfMissing:v})} label="Create dropdown labels if they don't exist on the board"/>
+          </div>
+        </FSSGroup>
+        <FSSGroup title="Webhooks" desc="POST form submissions to external endpoints.">
+          <FSSField label="Webhook URL" hint="Receives a JSON POST with all field values when the form is submitted.">
+            <VInput value={s.webhookUrl||""} onChange={e=>setS({webhookUrl:e.target.value})} placeholder="https://your-api.com/webhook"/>
+          </FSSField>
+          <FSSField label="Authorization Header" hint="Optional Bearer token or API key to include in webhook requests.">
+            <VInput value={s.webhookAuth||""} onChange={e=>setS({webhookAuth:e.target.value})} placeholder="Bearer sk-…"/>
+          </FSSField>
+        </FSSGroup>
+      </FSSSection>
+    ),
+
+    notifications: (
+      <FSSSection>
+        <FSSGroup title="Submission Alerts" desc="Get notified when someone submits this form.">
+          <VToggle checked={!!s.notifyOnSubmit} onChange={v=>setS({notifyOnSubmit:v})} label="Send email notification on each submission"/>
+          {s.notifyOnSubmit && (
+            <div style={{ marginTop:V.s3, display:"flex", flexDirection:"column", gap:V.s3 }}>
+              <FSSField label="Notify Email(s)" hint="Comma-separated list of email addresses.">
+                <VInput value={s.notifyEmails||""} onChange={e=>setS({notifyEmails:e.target.value})} placeholder="admin@org.com, lead@org.com"/>
+              </FSSField>
+              <FSSField label="Notification Subject">
+                <VInput value={s.notifySubject||""} onChange={e=>setS({notifySubject:e.target.value})} placeholder="New submission: {{form_name}}"/>
+              </FSSField>
+            </div>
+          )}
+        </FSSGroup>
+        <FSSGroup title="Digest">
+          <VToggle checked={!!s.dailyDigest} onChange={v=>setS({dailyDigest:v})} label="Send a daily digest of all submissions"/>
+        </FSSGroup>
+      </FSSSection>
+    ),
+
+    data: (
+      <FSSSection>
+        <FSSGroup title="Export Format" desc="How field values are structured in JSON exports and API payloads.">
+          <FSSField label="Date Format" hint="How date fields are serialized in exports.">
+            <div style={{ display:"flex", gap:V.s2 }}>
+              {["ISO 8601","MM/DD/YYYY","DD/MM/YYYY","YYYY-MM-DD"].map(fmt=>(
+                <button key={fmt} onClick={()=>setS({dateFormat:fmt})}
+                  style={{ padding:"5px 12px", border:`1.5px solid ${s.dateFormat===fmt?V.primary:V.border}`, borderRadius:V.r2, background:s.dateFormat===fmt?V.primaryLight:"#fff", color:s.dateFormat===fmt?V.primary:V.textSecondary, fontSize:V.sm, cursor:"pointer", fontFamily:V.font, fontWeight:s.dateFormat===fmt?700:400 }}>
+                  {fmt}
+                </button>
+              ))}
+            </div>
+          </FSSField>
+          <FSSField label="Empty Field Handling" hint="What to output when a field has no answer.">
+            <div style={{ display:"flex", gap:V.s2 }}>
+              {[["omit","Omit key"],["null","null"],["empty",'""']].map(([val,lbl])=>(
+                <button key={val} onClick={()=>setS({emptyFieldHandling:val})}
+                  style={{ padding:"5px 12px", border:`1.5px solid ${s.emptyFieldHandling===val?V.primary:V.border}`, borderRadius:V.r2, background:s.emptyFieldHandling===val?V.primaryLight:"#fff", color:s.emptyFieldHandling===val?V.primary:V.textSecondary, fontSize:V.sm, cursor:"pointer", fontFamily:V.font, fontWeight:s.emptyFieldHandling===val?700:400 }}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          </FSSField>
+        </FSSGroup>
+        <FSSGroup title="NEMSIS / Data Standards">
+          <div style={{ display:"flex", flexDirection:"column", gap:V.s3 }}>
+            <VToggle checked={!!s.includeNilAttributes} onChange={v=>setS({includeNilAttributes:v})} label="Include xsi:nil attributes on nillable fields in XML export"/>
+            <VToggle checked={!!s.includePNAttributes} onChange={v=>setS({includePNAttributes:v})} label="Include pertinent negative attributes in export payload"/>
+            <VToggle checked={!!s.includeNVAttributes} onChange={v=>setS({includeNVAttributes:v})} label="Include NOT value attributes in export payload"/>
+          </div>
+        </FSSGroup>
+        <FSSGroup title="Retention">
+          <FSSField label="Response Retention (days)" hint="Automatically delete submissions after this many days. 0 = keep forever.">
+            <VInput type="number" value={s.retentionDays||0} onChange={e=>setS({retentionDays:parseInt(e.target.value)||0})} style={{ width:120 }}/>
+          </FSSField>
+        </FSSGroup>
+      </FSSSection>
+    ),
+  };
+
+  const activeNavItem = SETTINGS_SECTIONS.find(s=>s.id===activeSection);
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", height:"100vh", background:V.bgApp, fontFamily:V.font }}>
+
+      {/* Top bar */}
+      <div style={{ height:50, background:V.bgSurface, borderBottom:`1px solid ${V.borderLight}`, display:"flex", alignItems:"center", padding:`0 ${V.s4}`, gap:V.s3, flexShrink:0, boxShadow:V.shadow1, zIndex:10 }}>
+        {/* Back button */}
+        <button
+          onClick={onBack}
+          style={{ display:"flex", alignItems:"center", gap:V.s2, background:"none", border:`1px solid ${V.borderLight}`, borderRadius:V.r2, cursor:"pointer", color:V.textSecondary, fontSize:V.sm, padding:"5px 12px", fontFamily:V.font, fontWeight:600, transition:"all .12s", flexShrink:0 }}
+          onMouseEnter={e=>{ e.currentTarget.style.background=V.bgHover; e.currentTarget.style.borderColor=V.border; }}
+          onMouseLeave={e=>{ e.currentTarget.style.background="none"; e.currentTarget.style.borderColor=V.borderLight; }}
+        >
+          <span style={{ fontSize:14 }}>←</span> Back to Builder
+        </button>
+
+        {/* Logo + form name */}
+        <div style={{ width:1, height:20, background:V.borderLight, flexShrink:0 }}/>
+        <div style={{ width:24, height:24, borderRadius:V.r3, background:V.primary, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+          <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5" height="5" rx="1.2" fill="white"/><rect x="8" y="1" width="5" height="5" rx="1.2" fill="white" opacity=".6"/><rect x="1" y="8" width="5" height="5" rx="1.2" fill="white" opacity=".6"/><rect x="8" y="8" width="5" height="5" rx="1.2" fill="white" opacity=".3"/></svg>
+        </div>
+        <div style={{ fontSize:V.sm, fontWeight:600, color:V.textSecondary, fontFamily:V.font }}>
+          <span style={{ color:V.textDisabled }}>{form.name||"Untitled Form"}</span>
+          <span style={{ color:V.border, margin:`0 ${V.s2}` }}>›</span>
+          <span style={{ color:V.textPrimary }}>Form Settings</span>
+        </div>
+        <div style={{ flex:1 }}/>
+        {/* Active section label */}
+        {activeNavItem && (
+          <div style={{ display:"flex", alignItems:"center", gap:V.s2, padding:`4px 12px`, background:V.primaryLight, borderRadius:V.rFull }}>
+            <span>{activeNavItem.icon}</span>
+            <span style={{ fontSize:V.sm, fontWeight:700, color:V.primary, fontFamily:V.font }}>{activeNavItem.label}</span>
+          </div>
+        )}
+      </div>
+
+      <div style={{ display:"flex", flex:1, overflow:"hidden" }}>
+
+        {/* Left nav sidebar */}
+        <div style={{ width:220, background:V.bgSurface, borderRight:`1px solid ${V.borderLight}`, display:"flex", flexDirection:"column", overflow:"hidden", flexShrink:0 }}>
+          <div style={{ padding:`${V.s3} ${V.s4} ${V.s2}`, borderBottom:`1px solid ${V.borderLight}` }}>
+            <div style={{ fontSize:V.xs, fontWeight:700, color:V.textDisabled, textTransform:"uppercase", letterSpacing:".1em", fontFamily:V.font }}>Settings</div>
+          </div>
+          <nav style={{ overflowY:"auto", flex:1, padding:`${V.s2} ${V.s2}` }}>
+            {SETTINGS_SECTIONS.map(sec => {
+              const isActive = activeSection === sec.id;
+              return (
+                <button key={sec.id} onClick={() => setActiveSection(sec.id)}
+                  style={{
+                    display:"flex", alignItems:"center", gap:V.s3, width:"100%",
+                    padding:`${V.s2} ${V.s3}`, border:"none", borderRadius:V.r3,
+                    background:isActive?V.primaryLight:"transparent",
+                    cursor:"pointer", textAlign:"left", transition:"background .1s",
+                    marginBottom:2,
+                  }}
+                  onMouseEnter={e=>{ if(!isActive) e.currentTarget.style.background=V.bgHover; }}
+                  onMouseLeave={e=>{ if(!isActive) e.currentTarget.style.background="transparent"; }}
+                >
+                  <div style={{
+                    width:32, height:32, borderRadius:V.r3, flexShrink:0,
+                    background:isActive?V.primary:V.bgApp,
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                    fontSize:14, transition:"background .15s",
+                    border:`1px solid ${isActive?V.primary:V.borderLight}`,
+                  }}>{sec.icon}</div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:V.sm, fontWeight:isActive?700:500, color:isActive?V.primary:V.textPrimary, fontFamily:V.font }}>{sec.label}</div>
+                    <div style={{ fontSize:V.xs, color:V.textDisabled, fontFamily:V.font, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{sec.desc}</div>
+                  </div>
+                  {isActive && <div style={{ width:3, height:20, background:V.primary, borderRadius:V.rFull, flexShrink:0 }}/>}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Sidebar footer */}
+          <div style={{ padding:V.s3, borderTop:`1px solid ${V.borderLight}`, background:V.bgApp }}>
+            <button onClick={onBack}
+              style={{ display:"flex", alignItems:"center", gap:V.s2, width:"100%", padding:`${V.s2} ${V.s3}`, border:`1px solid ${V.borderLight}`, borderRadius:V.r3, background:V.bgSurface, cursor:"pointer", fontFamily:V.font, fontSize:V.sm, color:V.textSecondary, fontWeight:600, transition:"all .12s" }}
+              onMouseEnter={e=>{ e.currentTarget.style.background=V.primaryLight; e.currentTarget.style.borderColor=V.primary; e.currentTarget.style.color=V.primary; }}
+              onMouseLeave={e=>{ e.currentTarget.style.background=V.bgSurface; e.currentTarget.style.borderColor=V.borderLight; e.currentTarget.style.color=V.textSecondary; }}>
+              <span style={{ fontSize:13 }}>←</span> Back to Builder
+            </button>
+          </div>
+        </div>
+
+        {/* Content area */}
+        <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
+          {/* Content header */}
+          <div style={{ padding:`${V.s4} ${V.s6}`, borderBottom:`1px solid ${V.borderLight}`, background:V.bgSurface, flexShrink:0 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:V.s3 }}>
+              <div style={{ width:40, height:40, borderRadius:V.r4, background:V.primaryLight, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0, border:`1px solid ${V.primary}33` }}>
+                {activeNavItem?.icon}
+              </div>
+              <div>
+                <div style={{ fontSize:V.xl, fontWeight:700, color:V.textPrimary, fontFamily:V.font }}>{activeNavItem?.label}</div>
+                <div style={{ fontSize:V.sm, color:V.textSecondary, fontFamily:V.font }}>{activeNavItem?.desc}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Panel content */}
+          <div style={{ flex:1, overflowY:"auto" }}>
+            <div style={{ maxWidth:680, margin:"0 auto" }}>
+              {panels[activeSection] || (
+                <div style={{ padding:`${V.s6} ${V.s6}`, color:V.textDisabled, fontFamily:V.font, textAlign:"center" }}>
+                  No settings available for this section.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main App ─────────────────────────────────────────────────────────────────
+export default function FormBuilder(){
+  const [form,setForm]=useState(INIT);
+  const [activePId,setActivePId]=useState(INIT.pages[0].id);
+  const [activeSId,setActiveSId]=useState(INIT.pages[0].sections[0].id);
+  const [selFId,setSelFId]=useState(null);
+  const [rightPanel,setRPanel]=useState("field");
+  const [showPreview,setPreview]=useState(false);
+  const [showJson,setJson]=useState(false);
+  const [showLibMgr,setLibMgr]=useState(false);
+  const [showNarrative,setNarrative]=useState(false);
+  const [panelCollapsed,setPanelCollapsed]=useState(false);
+  const [showSettings,setSettings]=useState(false);
+  const [dragFId,setDragFId]=useState(null);
+  const [dragPType,setDragPType]=useState(null);
+  const [columnDrag,setColumnDrag]=useState(null); // {cellId,rowId,fields[],span} being dragged cross-section
+  const [fieldDrag,setFieldDrag]=useState(null);   // {field,srcRowId,srcCellId} being dragged cross-section
+  const [secSettingsIds,setSecSettingsIds]=useState(null);
+
+  const activePage=form.pages.find(p=>p.id===activePId)||form.pages[0];
+  const activeSection=activePage?.sections.find(s=>s.id===activeSId)||activePage?.sections[0];
+
+  const setPages=pages=>setForm(f=>({...f,pages}));
+  const patchPage=(pgId,patch)=>setPages(form.pages.map(p=>p.id!==pgId?p:{...p,...patch}));
+  const patchSection=(pgId,secId,patch)=>setPages(form.pages.map(p=>p.id!==pgId?p:{...p,sections:p.sections.map(s=>s.id!==secId?s:{...s,...patch})}));
+  const setRows=rows=>patchSection(activePId,activeSId,{rows});
+
+  const addPage=()=>{const p=makePage(form.pages.length+1);setPages([...form.pages,p]);setActivePId(p.id);setActiveSId(p.sections[0].id);setSelFId(null);};
+  const deletePage=id=>{if(form.pages.length===1)return;const rem=form.pages.filter(p=>p.id!==id);setPages(rem);if(activePId===id){setActivePId(rem[0].id);setActiveSId(rem[0].sections[0].id);}};
+  const renamePage=(id,title)=>setPages(form.pages.map(p=>p.id===id?{...p,title}:p));
+  const addSection=pgId=>{const pg=form.pages.find(p=>p.id===pgId);const s=makeSection(pg.sections.length+1);setPages(form.pages.map(p=>p.id!==pgId?p:{...p,sections:[...p.sections,s]}));setActivePId(pgId);setActiveSId(s.id);setSelFId(null);};
+  const deleteSection=(pgId,secId)=>{const pg=form.pages.find(p=>p.id===pgId);if(pg.sections.length===1)return;const rem=pg.sections.filter(s=>s.id!==secId);setPages(form.pages.map(p=>p.id!==pgId?p:{...p,sections:rem}));if(activeSId===secId)setActiveSId(rem[0].id);};
+  const renameSection=(pgId,secId,title)=>patchSection(pgId,secId,{title});
+  const handleSelectSection=(pgId,secId)=>{setActivePId(pgId);setActiveSId(secId);setSelFId(null);};
+
+  const secSettingsSection=secSettingsIds?form.pages.find(p=>p.id===secSettingsIds.pgId)?.sections.find(s=>s.id===secSettingsIds.secId):null;
+
+  const handleSelectField=id=>{setSelFId(id);setRPanel("field");};
+
+  // Drop a dragged field into a target section: appends as new row
+  const handleFieldDropToSection = (tgtPageId, tgtSecId) => {
+    if (!fieldDrag) return;
+    const { field, srcRowId, srcCellId } = fieldDrag;
+
+    setForm(f => {
+      let pages = f.pages;
+      // Remove from source cell
+      pages = pages.map(p => ({
+        ...p, sections: p.sections.map(s => ({
+          ...s, rows: s.rows.map(r => {
+            if (r.id !== srcRowId) return r;
+            const newCells = r.cells.map(c =>
+              c.id !== srcCellId ? c : { ...c, fields: c.fields.filter(fi => fi.id !== field.id) }
+            );
+            // Remove row entirely if all cells now empty
+            const hasFields = newCells.some(c => c.fields.length > 0);
+            return hasFields ? { ...r, cells: newCells } : null;
+          }).filter(Boolean)
+        }))
+      }));
+      // Append as new full-width row in target section
+      const newRow = { ...makeRow(), cells:[{ id:uid(), fields:[field] }] };
+      newRow.preset = { ...COL_PRESETS[0], cols:[12] };
+      pages = pages.map(p => p.id !== tgtPageId ? p : {
+        ...p, sections: p.sections.map(s => s.id !== tgtSecId ? s : {
+          ...s, rows: [...s.rows, newRow]
+        })
+      });
+      return { ...f, pages };
+    });
+
+    setFieldDrag(null);
+    setActivePId(tgtPageId);
+    setActiveSId(tgtSecId);
+  };
+
+  // Drop a dragged column into a target section: append fields as a new row
+
+  const handleColumnDropToSection = (tgtPageId, tgtSecId) => {
+    if (!columnDrag) return;
+    const { rowId: srcRowId, cellId: srcCellId, fields } = columnDrag;
+
+    // Find source section
+    let srcPageId = null, srcSecId = null;
+    form.pages.forEach(p => p.sections.forEach(s => {
+      if (s.rows.some(r => r.id === srcRowId)) { srcPageId = p.id; srcSecId = s.id; }
+    }));
+
+    setForm(f => {
+      let pages = f.pages;
+
+      // Remove column from source row; if row becomes empty remove the row
+      pages = pages.map(p => p.id !== srcPageId ? p : {
+        ...p, sections: p.sections.map(s => s.id !== srcSecId ? s : {
+          ...s, rows: s.rows.map(r => {
+            if (r.id !== srcRowId) return r;
+            const newCells = r.cells.filter(c => c.id !== srcCellId);
+            if (newCells.length === 0) return null; // mark for removal
+            const n = newCells.length;
+            const base = Math.floor(GRID_COLS / n);
+            const rem  = GRID_COLS - base * n;
+            return { ...r, preset:{...r.preset, cols:Array.from({length:n},(_,i)=>i===0?base+rem:base), label:"Custom"}, cells:newCells };
+          }).filter(Boolean)
+        })
+      });
+
+      // Add fields as a new full-width row in the target section
+      if (fields && fields.length > 0) {
+        const newRow = { ...makeRow(), cells:[{ id:uid(), fields }] };
+        newRow.preset = { ...COL_PRESETS[0], cols:[12] };
+        pages = pages.map(p => p.id !== tgtPageId ? p : {
+          ...p, sections: p.sections.map(s => s.id !== tgtSecId ? s : {
+            ...s, rows:[...s.rows, newRow]
+          })
+        });
+      }
+
+      return { ...f, pages };
+    });
+
+    setColumnDrag(null);
+    // Navigate to target section
+    setActivePId(tgtPageId);
+    setActiveSId(tgtSecId);
+  };
+  const handleFieldChange=updated=>{setRows((activeSection?.rows||[]).map(r=>({...r,cells:r.cells.map(c=>({...c,fields:c.fields.map(f=>f.id===updated.id?updated:f)}))})));};
+  const selectedFieldData=findSelectedField(activeSection?.rows||[], selFId);
+
+  const cats=[...new Set(FIELD_TYPES.map(f=>f.category))];
+
+  // rightPanelContent → see getRightPanelContent() top-level
+
+  if(showSettings) return <FormSettingsPage form={form} onChange={setForm} onBack={()=>setSettings(false)}/>;
+
+  return <div style={{display:"flex",flexDirection:"column",height:"100vh",background:V.bgApp,fontFamily:V.font,minHeight:700}}>
+    <div style={{height:50,background:V.bgSurface,borderBottom:`1px solid ${V.borderLight}`,display:"flex",alignItems:"center",padding:`0 ${V.s4}`,gap:V.s3,flexShrink:0,boxShadow:V.shadow1,zIndex:10}}>
+      <div style={{width:28,height:28,borderRadius:V.r3,background:V.primary,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5" height="5" rx="1.2" fill="white"/><rect x="8" y="1" width="5" height="5" rx="1.2" fill="white" opacity=".6"/><rect x="1" y="8" width="5" height="5" rx="1.2" fill="white" opacity=".6"/><rect x="8" y="8" width="5" height="5" rx="1.2" fill="white" opacity=".3"/></svg></div>
+      <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} style={{fontSize:V.md,fontWeight:700,color:V.textPrimary,border:"none",background:"none",outline:"none",flex:1,padding:`3px ${V.s2}`,borderRadius:V.r2,fontFamily:V.font,minWidth:0}} onFocus={e=>e.target.style.background=V.bgHighlight} onBlur={e=>e.target.style.background="none"}/>
+      <div style={{display:"flex",gap:V.s2}}><VBtn variant="subtle" size="sm" onClick={()=>setNarrative(true)}>✍ Narrative</VBtn><VBtn variant="subtle" size="sm" onClick={()=>setSettings(true)}>⚙ Settings</VBtn><VBtn variant="subtle" size="sm" onClick={()=>setLibMgr(true)}>📚 Libraries</VBtn><VBtn variant="secondary" size="sm" onClick={()=>setJson(true)}>↑ Export</VBtn><VBtn variant="ghost" size="sm" onClick={()=>setPreview(true)}>▶ Preview</VBtn><VBtn size="sm">Publish</VBtn></div>
+    </div>
+    <div style={{display:"flex",flex:1,overflow:"hidden"}}>
+      <Sidebar form={form} activeSectionId={activeSId} onSelectSection={handleSelectSection}
+        onAddPage={addPage} onDeletePage={deletePage} onRenamePage={renamePage}
+        onAddSection={addSection} onDeleteSection={deleteSection} onRenameSection={renameSection}
+        onOpenSecSettings={(pgId,secId)=>setSecSettingsIds({pgId,secId})}
+        columnDrag={columnDrag}
+        onColumnDropToSection={handleColumnDropToSection}
+        fieldDrag={fieldDrag}
+        onFieldDropToSection={handleFieldDropToSection}/>
+      <div style={{width:186,background:V.bgSurface,borderRight:`1px solid ${V.borderLight}`,display:"flex",flexDirection:"column",overflow:"hidden",flexShrink:0}}>
+        <div style={{padding:`${V.s3} ${V.s3} ${V.s2}`,borderBottom:`1px solid ${V.borderLight}`}}><div style={{fontSize:V.xs,fontWeight:700,color:V.textDisabled,textTransform:"uppercase",letterSpacing:".1em",fontFamily:V.font}}>Field Types</div></div>
+        <div style={{overflowY:"auto",flex:1,padding:`${V.s2} ${V.s2}`}}>
+          {cats.map(cat=>{const c=CAT[cat];return <div key={cat} style={{marginBottom:V.s4}}>
+            <div style={{display:"flex",alignItems:"center",gap:V.s1,padding:`0 ${V.s2} ${V.s2}`,marginBottom:V.s1}}><div style={{width:6,height:6,borderRadius:"50%",background:c.dot,flexShrink:0}}/><span style={{fontSize:9,fontWeight:700,color:c.dot,textTransform:"uppercase",letterSpacing:".12em",fontFamily:V.font}}>{cat}</span></div>
+            {FIELD_TYPES.filter(f=>f.category===cat).map(ft=><div key={ft.type} draggable onDragStart={e=>{setDragPType(ft.type);setDragFId(null);e.dataTransfer.effectAllowed="copy";}} onClick={()=>{const rows=activeSection?.rows||[];const f=makeField(ft.type);if(rows.length===0){const row=makeRow();row.cells[0].fields.push(f);patchSection(activePId,activeSId,{rows:[row]});}else{const row=rows[rows.length-1];const cell=row.cells[0];setRows(rows.map(r=>r.id!==row.id?r:{...r,cells:r.cells.map(c=>c.id!==cell.id?c:{...c,fields:[...c.fields,f]})}));}setSelFId(f.id);setRPanel("field");}} style={{display:"flex",alignItems:"center",gap:V.s2,padding:`${V.s2} ${V.s2}`,borderRadius:V.r2,cursor:"pointer",marginBottom:1,transition:"background .1s"}} onMouseEnter={e=>e.currentTarget.style.background=c.bg} onMouseLeave={e=>e.currentTarget.style.background="none"}><div style={{width:22,height:22,borderRadius:V.r2,background:c.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:c.text,flexShrink:0}}>{ft.icon}</div><span style={{fontSize:V.sm,color:V.textPrimary,fontFamily:V.font}}>{ft.label}</span></div>)}
+          </div>;})}
+        </div>
+      </div>
+      <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        <div style={{background:V.bgSurface,borderBottom:`1px solid ${V.borderLight}`,padding:`${V.s2} ${V.s5}`,display:"flex",alignItems:"center",gap:V.s2,flexShrink:0}}>
+          <button onClick={()=>setRPanel("page")} title="Edit page settings" style={{background:"none",border:"none",cursor:"pointer",fontSize:V.sm,color:rightPanel==="page"?V.primary:V.textDisabled,fontFamily:V.font,fontWeight:rightPanel==="page"?700:500,padding:`${V.s1} ${V.s2}`,borderRadius:V.r2,transition:"all .12s"}} onMouseEnter={e=>e.currentTarget.style.background=V.bgHover} onMouseLeave={e=>e.currentTarget.style.background="none"}>{activePage?.title}</button>
+          {(()=>{const prf=getRequiredFields({pages:[activePage]});if(!prf.length)return null;const c=reqColor(0,prf.length);return <span title={`${prf.length} required field${prf.length!==1?"s":""} on this page`} style={{fontSize:9,padding:"1px 6px",borderRadius:V.rFull,background:c.bg,color:c.text,fontWeight:700,border:`1px solid ${c.dot}33`,fontFamily:V.font}}>{prf.length}*</span>})()}
+          <span style={{fontSize:V.sm,color:V.border}}>›</span>
+          <input value={activeSection?.title||""} onChange={e=>patchSection(activePId,activeSId,{title:e.target.value})} style={{fontSize:V.sm,fontWeight:700,color:V.primary,border:"none",background:"none",outline:"none",padding:`${V.s1} ${V.s2}`,borderRadius:V.r2,minWidth:60,fontFamily:V.font}} onFocus={e=>e.target.style.background=V.primaryLight} onBlur={e=>e.target.style.background="none"}/>
+          {(()=>{const srf=getRequiredFields({pages:[{...activePage,sections:[activeSection]}]});if(!srf.length)return null;const c=reqColor(0,srf.length);return <span title={`${srf.length} required field${srf.length!==1?"s":""} in this section`} style={{fontSize:9,padding:"1px 6px",borderRadius:V.rFull,background:c.bg,color:c.text,fontWeight:700,border:`1px solid ${c.dot}33`,fontFamily:V.font}}>{srf.length}*</span>})()}
+          <button onClick={()=>setSecSettingsIds({pgId:activePId,secId:activeSId})} title="Section settings" style={{background:"none",border:`1px solid ${V.borderLight}`,cursor:"pointer",color:V.textDisabled,fontSize:V.sm,padding:"3px 8px",borderRadius:V.r2,fontFamily:V.font,display:"flex",alignItems:"center",gap:3}} onMouseEnter={e=>{e.currentTarget.style.background=V.bgHover;e.currentTarget.style.borderColor=V.border;}} onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.borderColor=V.borderLight;}}>⚙ Section</button>
+          <div style={{flex:1}}/>
+          <VBtn variant="ghost" size="sm" onClick={()=>addSection(activePId)} style={{border:`1px dashed ${V.border}`,color:V.textSecondary,fontSize:V.xs}}>+ Add Section</VBtn>
+        </div>
+        <GridCanvas rows={activeSection?.rows||[]} onUpdateRows={setRows} onSelectField={handleSelectField} selectedFieldId={selFId} dragState={{fieldId:dragFId,paletteType:dragPType,setFieldId:setDragFId,setPaletteType:setDragPType,columnDrag,setColumnDrag,onColumnDragStart:cd=>setColumnDrag(cd),onColumnDropToSection:handleColumnDropToSection,fieldDrag,setFieldDrag,onFieldDropToSection:handleFieldDropToSection}} sectionSettings={activeSection?.settings}/>
+      </div>
+      {/* ── Collapsible right panel ── */}
+      <div style={{
+        width: panelCollapsed ? 36 : 278,
+        background: V.bgSurface,
+        borderLeft: `1px solid ${V.borderLight}`,
+        display: "flex", flexDirection: "column",
+        overflow: "hidden", flexShrink: 0,
+        transition: "width .22s cubic-bezier(.4,0,.2,1)",
+        position: "relative",
+      }}>
+        {panelCollapsed ? (
+          /* ── Collapsed rail ── */
+          <div style={{ display:"flex", flexDirection:"column", alignItems:"center", paddingTop:V.s2, gap:2, height:"100%" }}>
+            {/* Expand button */}
+            <button
+              onClick={()=>setPanelCollapsed(false)}
+              title="Expand panel"
+              style={{ width:28,height:28,borderRadius:V.r3,background:"none",border:"none",cursor:"pointer",color:V.textDisabled,fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .12s",flexShrink:0 }}
+              onMouseEnter={e=>{e.currentTarget.style.background=V.bgHover;e.currentTarget.style.color=V.primary;}}
+              onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color=V.textDisabled;}}
+            >‹</button>
+            <div style={{width:20,height:1,background:V.borderLight,margin:`${V.s1} 0`}}/>
+            {/* Tab icons */}
+            {[["field","⚙","Field"],["page","◈","Page"],["form","≡","Form"]].map(([id,ico,lbl])=>(
+              <button key={id}
+                onClick={()=>{setRPanel(id);setPanelCollapsed(false);}}
+                title={lbl}
+                style={{ width:28,height:28,borderRadius:V.r3,background:rightPanel===id?V.primaryLight:"none",border:"none",cursor:"pointer",color:rightPanel===id?V.primary:V.textDisabled,fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .12s",flexShrink:0 }}
+                onMouseEnter={e=>{if(rightPanel!==id){e.currentTarget.style.background=V.bgHover;e.currentTarget.style.color=V.textPrimary;}}}
+                onMouseLeave={e=>{if(rightPanel!==id){e.currentTarget.style.background="none";e.currentTarget.style.color=V.textDisabled;}}}
+              >{ico}</button>
+            ))}
+          </div>
+        ) : (
+          /* ── Expanded panel ── */
+          <>
+            <div style={{display:"flex",borderBottom:`1px solid ${V.borderLight}`,flexShrink:0,alignItems:"center"}}>
+              {[["field","Field"],["page","Page"],["form","Form"]].map(([id,lb])=>(
+                <button key={id} onClick={()=>setRPanel(id)}
+                  style={{flex:1,padding:`${V.s3} ${V.s1}`,border:"none",background:"none",cursor:"pointer",fontSize:V.sm,fontWeight:rightPanel===id?700:400,color:rightPanel===id?V.primary:V.textSecondary,borderBottom:rightPanel===id?`2px solid ${V.primary}`:"2px solid transparent",marginBottom:-1,fontFamily:V.font,whiteSpace:"nowrap"}}>
+                  {lb}
+                </button>
+              ))}
+              {/* Collapse button */}
+              <button
+                onClick={()=>setPanelCollapsed(true)}
+                title="Collapse panel"
+                style={{ width:28,height:"100%",minHeight:38,border:"none",background:"none",cursor:"pointer",color:V.textDisabled,fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,borderLeft:`1px solid ${V.borderLight}`,transition:"all .12s" }}
+                onMouseEnter={e=>{e.currentTarget.style.background=V.bgHover;e.currentTarget.style.color=V.primary;}}
+                onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color=V.textDisabled;}}
+              >›</button>
+            </div>
+            {getRightPanelContent(rightPanel, activePage, activePId, selectedFieldData, handleFieldChange, form, setForm, patchPage)}
+          </>
+        )}
+      </div>
+    </div>
+    {secSettingsSection&&<SectionSettingsDrawer section={secSettingsSection} onClose={()=>setSecSettingsIds(null)} onChange={updated=>patchSection(secSettingsIds.pgId,secSettingsIds.secId,updated)}/>}
+    {showPreview&&<PreviewModal form={form} onClose={()=>setPreview(false)}/>}
+    {showJson&&<JsonModal form={form} onClose={()=>setJson(false)}/>}
+    {showLibMgr&&<UnifiedLibraryBrowser mode="manage" libraries={form.libraries||[]} onUpdateLibraries={libs=>setForm(f=>({...f,libraries:libs}))} onClose={()=>setLibMgr(false)}/>}
+    {showNarrative&&<NarrativeBuilder form={form} onUpdateTemplates={t=>setForm(f=>({...f,narrativeTemplates:t}))} onClose={()=>setNarrative(false)}/>}
+  </div>;
+}
