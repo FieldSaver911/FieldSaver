@@ -410,24 +410,6 @@ export function Sidebar({
         overflow: 'hidden',
       }}
     >
-      {/* Drag-active banner */}
-      {columnDrag && (
-        <div
-          style={{
-            backgroundColor: 'rgba(0, 115, 234, 0.2)',
-            borderBottom: `1px solid rgba(0, 115, 234, 0.3)`,
-            padding: `${V.s2} ${V.s3}`,
-            fontSize: V.xs,
-            color: '#0073EA',
-            fontFamily: V.font,
-            textAlign: 'center',
-            flexShrink: 0,
-          }}
-        >
-          Moving column — drop on section
-        </div>
-      )}
-
       {/* Header */}
       <div
         style={{
