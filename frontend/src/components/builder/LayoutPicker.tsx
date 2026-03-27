@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { COL_PRESETS } from '../../constants/fieldTypes';
 import { V } from '../../constants/design';
 
@@ -5,10 +7,63 @@ interface LayoutPickerProps {
   onSelect: (preset: typeof COL_PRESETS[0]) => void;
   onClose: () => void;
   position?: { top: number; left: number; width: number };
+  fullWidth?: boolean; // If true, use button width for dropdown width
 }
 
-export function LayoutPicker({ onSelect, onClose, position }: LayoutPickerProps) {
-  return (
+export function LayoutPicker({ onSelect, onClose, position, fullWidth }: LayoutPickerProps) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [adjustedPosition, setAdjustedPosition] = useState<{ top: number; left: number; width: number } | undefined>(position);
+  const [maxHeight, setMaxHeight] = useState<string>('65vh');
+
+  useEffect(() => {
+    if (!position) return;
+
+    // Wait for menu to render before measuring
+    const timer = setTimeout(() => {
+      if (!menuRef.current) return;
+
+      const PADDING = 20; // Padding from viewport edge
+      const BUTTON_HEIGHT = 40;
+      const GAP = 8;
+      const menuHeight = menuRef.current.offsetHeight;
+      const viewportHeight = window.innerHeight;
+
+      // Calculate available space
+      const availableSpaceBelow = viewportHeight - position.top - BUTTON_HEIGHT;
+      const availableSpaceAbove = position.top;
+
+      let finalTop = position.top;
+      let finalMaxHeight = '65vh';
+
+      // Determine position and max height
+      if (availableSpaceBelow >= menuHeight) {
+        // Enough space below - position below button
+        finalTop = position.top + BUTTON_HEIGHT + GAP;
+        finalMaxHeight = `${availableSpaceBelow - PADDING}px`;
+      } else if (availableSpaceAbove >= menuHeight) {
+        // Not enough below but enough above - position above button
+        finalTop = position.top - menuHeight - GAP;
+        finalMaxHeight = `${availableSpaceAbove - PADDING}px`;
+      } else if (availableSpaceAbove > availableSpaceBelow) {
+        // Position above and limit height
+        finalTop = PADDING;
+        finalMaxHeight = `${availableSpaceAbove - PADDING}px`;
+      } else {
+        // Position below and limit height
+        finalTop = position.top + BUTTON_HEIGHT + GAP;
+        finalMaxHeight = `${availableSpaceBelow - PADDING}px`;
+      }
+
+      setAdjustedPosition({
+        ...position,
+        top: finalTop,
+      });
+      setMaxHeight(finalMaxHeight);
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [position]);
+  return createPortal(
     <>
       {/* Backdrop - click to close */}
       <div
@@ -25,16 +80,20 @@ export function LayoutPicker({ onSelect, onClose, position }: LayoutPickerProps)
 
       {/* Dropdown menu - very compact */}
       <div
+        ref={menuRef}
         style={{
-          position: position ? 'fixed' : 'absolute',
-          ...(position
-            ? { top: `${position.top}px`, left: `${position.left}px`, width: `${position.width}px` }
-            : { top: '100%', left: 0, marginTop: '4px', right: 'auto' }),
+          position: 'fixed',
+          ...(adjustedPosition && {
+            top: `${adjustedPosition.top}px`,
+            left: `${fullWidth ? adjustedPosition.left : Math.max(10, Math.min(adjustedPosition.left, window.innerWidth - 400))}px`,
+            ...(fullWidth && { width: `${adjustedPosition.width}px` }),
+          }),
+          ...(fullWidth ? {} : { minWidth: '380px' }),
           backgroundColor: V.bgSurface,
           borderRadius: V.r3,
           padding: '10px',
           maxWidth: 'calc(100vw - 20px)',
-          maxHeight: '65vh',
+          maxHeight,
           overflowY: 'auto',
           overflowX: 'hidden',
           boxShadow: V.shadow3,
@@ -64,7 +123,7 @@ export function LayoutPicker({ onSelect, onClose, position }: LayoutPickerProps)
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+            gridTemplateColumns: 'repeat(2, 1fr)',
             gap: '6px',
           }}
         >
@@ -174,6 +233,7 @@ export function LayoutPicker({ onSelect, onClose, position }: LayoutPickerProps)
           ))}
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }

@@ -509,9 +509,11 @@ function RowView({
   const [showLayoutPicker, setShowLayoutPicker] = React.useState(false);
   const [addColHovered, setAddColHovered] = React.useState(false);
   const [delRowHovered, setDelRowHovered] = React.useState(false);
+  const [buttonPosition, setButtonPosition] = React.useState<{ top: number; left: number; width: number } | null>(null);
 
   // Resize state and refs
   const rowRef = React.useRef<HTMLDivElement>(null);
+  const layoutButtonRef = React.useRef<HTMLButtonElement>(null);
   const draggingRef = React.useRef<{ handleIdx: number; startX: number; startCols: number[] } | null>(null);
   const finalColsRef = React.useRef<number[]>(row.preset.cols);
   const [liveCols, setLiveCols] = React.useState<number[]>(row.preset.cols);
@@ -691,8 +693,19 @@ function RowView({
           {/* Layout selector - with dropdown */}
           <div style={{ position: 'relative' }}>
             <button
+              ref={layoutButtonRef}
               type="button"
-              onClick={() => setShowLayoutPicker(!showLayoutPicker)}
+              onClick={() => {
+                if (!showLayoutPicker && layoutButtonRef.current) {
+                  const rect = layoutButtonRef.current.getBoundingClientRect();
+                  setButtonPosition({
+                    top: rect.bottom,
+                    left: rect.left,
+                    width: rect.width,
+                  });
+                }
+                setShowLayoutPicker(!showLayoutPicker);
+              }}
               title="Change column layout"
               style={{
                 display: 'flex',
@@ -733,8 +746,9 @@ function RowView({
             </button>
 
             {/* Layout picker dropdown */}
-            {showLayoutPicker && (
+            {showLayoutPicker && buttonPosition && (
               <LayoutPicker
+                position={buttonPosition}
                 onSelect={(preset) => {
                   onUpdateRow(row.id, { preset });
                   setShowLayoutPicker(false);
@@ -930,26 +944,8 @@ function SectionView({
   const [collapsed, setCollapsed] = React.useState(false);
   const [showRowMenu, setShowRowMenu] = React.useState(false);
   const [addRowHovered, setAddRowHovered] = React.useState(false);
-  const [menuPos, setMenuPos] = React.useState<{ top: number; left: number; width: number } | null>(null);
+  const [buttonPos, setButtonPos] = React.useState<{ top: number; left: number; width: number } | null>(null);
   const addRowButtonRef = React.useRef<HTMLButtonElement>(null);
-
-  React.useEffect(() => {
-    if (showRowMenu && addRowButtonRef.current) {
-      const rect = addRowButtonRef.current.getBoundingClientRect();
-      const menuHeight = 350; // Approximate height of menu
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const spaceAbove = rect.top;
-
-      // Position above if not enough space below
-      const positionAbove = spaceBelow < menuHeight && spaceAbove > menuHeight;
-      const top = positionAbove ? rect.top - menuHeight - 8 : rect.bottom + 8;
-
-      // Compact width (narrower than button)
-      const menuWidth = 280;
-
-      setMenuPos({ top, left: rect.left, width: menuWidth });
-    }
-  }, [showRowMenu]);
 
   const totalFields = section.rows.reduce(
     (acc, r) => acc + r.cells.reduce((a, c) => a + c.fields.length, 0),
@@ -1113,7 +1109,18 @@ function SectionView({
             <button
               ref={addRowButtonRef}
               type="button"
-              onClick={(e) => { e.stopPropagation(); setShowRowMenu((v) => !v); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!showRowMenu && addRowButtonRef.current) {
+                  const rect = addRowButtonRef.current.getBoundingClientRect();
+                  setButtonPos({
+                    top: rect.bottom + 8,
+                    left: rect.left,
+                    width: rect.width,
+                  });
+                }
+                setShowRowMenu((v) => !v);
+              }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -1138,81 +1145,16 @@ function SectionView({
               Add Row
             </button>
 
-            {showRowMenu && menuPos && (
-              <>
-                {/* Backdrop */}
-                <div
-                  style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    zIndex: 9998,
-                  }}
-                  onClick={() => setShowRowMenu(false)}
-                />
-                {/* Menu - compact vertical layout */}
-                <div
-                  style={{
-                    position: 'fixed',
-                    top: `${menuPos.top}px`,
-                    left: `${menuPos.left}px`,
-                    width: `${menuPos.width}px`,
-                    zIndex: 9999,
-                    backgroundColor: V.bgSurface,
-                    border: `1px solid ${V.borderLight}`,
-                    borderRadius: V.r3,
-                    boxShadow: V.shadow2,
-                    padding: V.s2,
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(2, 1fr)',
-                    gap: V.s1,
-                    maxHeight: 'calc(100vh - 100px)',
-                    overflowY: 'auto',
-                    overflowX: 'hidden',
-                    boxSizing: 'border-box',
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {COL_PRESETS.map((preset) => (
-                    <button
-                      key={preset.label}
-                      type="button"
-                      onClick={() => {
-                        onAddRow(section.id, preset);
-                        setShowRowMenu(false);
-                      }}
-                      title={preset.hint}
-                      style={{
-                        padding: `${V.s1} ${V.s2}`,
-                        border: `1px solid ${V.borderLight}`,
-                        borderRadius: V.r2,
-                        backgroundColor: V.bgApp,
-                        color: V.textPrimary,
-                        cursor: 'pointer',
-                        fontSize: V.sm,
-                        fontFamily: V.font,
-                        transition: 'all 0.1s',
-                        whiteSpace: 'normal',
-                        textAlign: 'center',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = V.primary;
-                        e.currentTarget.style.backgroundColor = V.primaryBg;
-                        e.currentTarget.style.color = V.primary;
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = V.borderLight;
-                        e.currentTarget.style.backgroundColor = V.bgApp;
-                        e.currentTarget.style.color = V.textPrimary;
-                      }}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
-              </>
+            {showRowMenu && buttonPos && (
+              <LayoutPicker
+                position={buttonPos}
+                fullWidth={true}
+                onSelect={(preset) => {
+                  onAddRow(section.id, preset);
+                  setShowRowMenu(false);
+                }}
+                onClose={() => setShowRowMenu(false)}
+              />
             )}
           </div>
         </div>
