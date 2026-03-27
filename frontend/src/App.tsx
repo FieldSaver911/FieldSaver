@@ -1,31 +1,17 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-
-// Pages — Claude Code will implement these using scaffold-feature skill
-// import LoginPage from './pages/LoginPage';
-// import BuilderPage from './pages/BuilderPage';
-// import FormsListPage from './pages/FormsListPage';
-
-function PlaceholderPage({ name }: { name: string }) {
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      height: '100vh', fontFamily: 'system-ui', fontSize: 18, color: '#676879',
-    }}>
-      {name} — scaffold this page using: <br/>
-      <code style={{ marginLeft: 8, color: '#0073EA' }}>
-        /scaffold-feature {name.toLowerCase().replace(' ', '-')}
-      </code>
-    </div>
-  );
-}
+import { LoginPage } from './components/auth/LoginPage';
+import { RegisterPage } from './components/auth/RegisterPage';
+import { FormsListPage } from './pages/FormsListPage';
+import { BuilderPage } from './pages/BuilderPage';
 
 function App() {
   return (
     <Routes>
-      <Route path="/login"   element={<PlaceholderPage name="Login Page" />} />
-      <Route path="/builder" element={<PlaceholderPage name="Form Builder" />} />
-      <Route path="/forms"   element={<PlaceholderPage name="Forms List" />} />
-      <Route path="/"        element={<Navigate to="/builder" replace />} />
+      <Route path="/login"       element={<LoginPage />} />
+      <Route path="/register"    element={<RegisterPage />} />
+      <Route path="/forms"       element={<FormsListPage />} />
+      <Route path="/forms/:id"   element={<BuilderPage />} />
+      <Route path="/"            element={<Navigate to="/forms" replace />} />
     </Routes>
   );
 }

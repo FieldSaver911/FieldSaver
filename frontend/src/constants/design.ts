@@ -77,7 +77,7 @@ export const CAT = {
 } as const;
 
 /** Maps NEMSIS library category name to a CAT color */
-export function categoryColor(category: string): typeof CAT.basic {
+export function categoryColor(category: string): (typeof CAT)[keyof typeof CAT] {
   if (category === 'Pertinent Negative') return CAT.layout;
   if (category === 'NOT Value')          return CAT.choice;
   if (category === 'Nillable Marker')    return CAT.advanced;

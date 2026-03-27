@@ -1,7 +1,15 @@
 import type { Knex } from 'knex';
 import * as dotenv from 'dotenv';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
 
-dotenv.config();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Load .env from the project root (one level above backend/)
+// so DATABASE_URL and JWT_SECRET are available when running tests
+// from the backend workspace directory.
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config(); // also allow a local backend/.env to override
 
 const config: Record<string, Knex.Config> = {
   development: {
@@ -47,4 +55,3 @@ const config: Record<string, Knex.Config> = {
 };
 
 export default config;
-module.exports = config;

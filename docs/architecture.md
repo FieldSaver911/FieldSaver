@@ -14,8 +14,14 @@ The frontend uses Zustand for global state (form tree, libraries, active selecti
 ## Knex over TypeORM/Prisma
 Knex gives direct SQL control without magic. Combined with `knex-stringcase`, it auto-converts between JS camelCase and DB snake_case. Migrations are plain TypeScript files.
 
-## Inline styles (no CSS framework)
-The original artifact used a design token system (`const V = {...}`) with 100% inline styles. The migrated frontend preserves this exactly. No Tailwind, no CSS modules. This keeps the Vibe Design System pixel-perfect without a build step for styles.
+## Inline styles + Monday.com Vibe Design System (no CSS framework)
+The frontend uses **Monday.com's Vibe Design System** (https://developer.monday.com/apps/docs/vibe-design-system) with 100% inline styles and design tokens. The original artifact's design token system (`const V = {...}`) is aligned with Vibe's color palette and spacing scale.
+
+**Why:**
+- Preserves pixel-perfect consistency with monday.com UI
+- No CSS build step needed (tokens are JS constants)
+- Access to 50+ pre-built Vibe components for consistent UI patterns
+- No Tailwind, no CSS modules, no styled-components
 
 ## JWT Auth (no sessions)
 Stateless JWT tokens. Backend validates on every request via middleware. Tokens expire in 8h; refresh tokens stored in httpOnly cookies expire in 30 days.

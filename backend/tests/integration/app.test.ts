@@ -1,8 +1,7 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import supertest from 'supertest';
 import { createApp } from '../../src/app';
 import { db } from '../../src/db';
-import { makeUser } from '../factories';
 
 const app = createApp();
 const request = supertest(app);
@@ -22,15 +21,16 @@ describe('Auth — POST /api/v1/auth/register', () => {
     await db('users').where('email', testEmail).delete();
   });
 
-  it('creates a new user and returns a token', async () => {
+  // register returns the new user only (no token) — call /login separately for tokens
+  it('creates a new user and returns user data without passwordHash', async () => {
     const res = await request
       .post('/api/v1/auth/register')
       .send({ email: testEmail, password: 'password123', name: 'CI User' });
 
     expect(res.status).toBe(201);
-    expect(res.body.data.token).toBeTruthy();
-    expect(res.body.data.user.email).toBe(testEmail);
-    expect(res.body.data.user).not.toHaveProperty('passwordHash');
+    expect(res.body.data.id).toBeTruthy();
+    expect(res.body.data.email).toBe(testEmail);
+    expect(res.body.data).not.toHaveProperty('passwordHash');
   });
 
   it('returns 422 with invalid email', async () => {
@@ -55,15 +55,15 @@ describe('Auth — POST /api/v1/auth/register', () => {
   });
 });
 
-describe('Forms — protected routes', () => {
+describe('Auth — GET /api/v1/me', () => {
   it('returns 401 without auth token', async () => {
-    const res = await request.get('/api/v1/forms');
+    const res = await request.get('/api/v1/me');
     expect(res.status).toBe(401);
   });
 
   it('returns 401 with malformed token', async () => {
     const res = await request
-      .get('/api/v1/forms')
+      .get('/api/v1/me')
       .set('Authorization', 'Bearer not-a-real-token');
     expect(res.status).toBe(401);
   });

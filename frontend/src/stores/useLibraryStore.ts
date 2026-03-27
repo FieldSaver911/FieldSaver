@@ -18,7 +18,7 @@ interface LibraryStore {
   setRows: (libraryId: string, rows: LibraryRowDef[]) => void;
 }
 
-export const useLibraryStore = create<LibraryStore>((set, get) => ({
+export const useLibraryStore = create<LibraryStore>((set) => ({
   libraries: [],
   isLoading: false,
   error: null,

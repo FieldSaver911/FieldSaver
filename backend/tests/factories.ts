@@ -2,7 +2,7 @@
  * Test factories for backend tests.
  * Always use these — never hardcode UUIDs or emails.
  */
-import { v4 as uuid } from 'uuid';
+import { randomUUID as uuid } from 'crypto';
 
 export function makeUser(overrides: Record<string, unknown> = {}) {
   const id = uuid();

@@ -1,4 +1,24 @@
-import { useState, useRef } from "react";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FieldSaver Form Builder</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root { height: 100%; }
+    body { font-family: 'Figtree', system-ui, sans-serif; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+const { useState, useRef } = React;
 
 const V = {
   primary:"#0073EA", primaryHover:"#0060C0", primaryLight:"#DCEEFF", primaryBg:"#EAF3FF",
@@ -2573,9 +2593,12 @@ function LiveField({ field, values, notValues, onValue, onNotValue, libraries })
   // Rows visible to respondent as chips, grouped by category
   const chipRows = fieldRows.filter(r => showCats.includes(r.category) && r.category !== "Nillable Marker");
   const hasNVorPN = chipRows.length > 0;
+  // ALL hooks must be declared before any conditional return (Rules of Hooks)
   const [notMode, setNotMode] = useState(false);
   const [clickCount, setClickCount] = useState(0);
+  const [selectedNot, setSelectedNot] = useState(null);
   const clickTimer = useRef(null);
+  const prevNotRef = useRef(null);
 
   const val = values[field.id] ?? "";
   const notVal = notValues[field.id] ?? null;
@@ -2596,17 +2619,51 @@ function LiveField({ field, values, notValues, onValue, onNotValue, libraries })
     }
   };
 
+  // Layout fields render as static preview — no interactive state needed
   if (isLayout) return <FieldPreview field={field}/>;
+
+  // ── Derived display state (safe — all hooks already declared above) ────────
+  const notState = notMode && hasNVorPN;
+
+  // Sync selectedNot chip → notValues callback (run as side effect on each render)
+  if (selectedNot !== prevNotRef.current) {
+    prevNotRef.current = selectedNot;
+    if (selectedNot) {
+      onNotValue(field.id, selectedNot.exportKey || selectedNot.rowId);
+    } else {
+      onNotValue(field.id, null);
+    }
+  }
+
+  const fieldBor = notState
+    ? `1.5px solid ${V.negative}`
+    : isFilled
+    ? `1.5px solid ${V.positive}`
+    : `1.5px solid ${V.borderLight}`;
+
+  const fieldBg = notState
+    ? "#fff8f8"
+    : isFilled
+    ? V.positiveBg
+    : V.bgSurface;
+
+  const labelCol = notState ? V.negative : isFilled ? V.positive : V.textPrimary;
+
+  const handleDoubleTap = handleTap;
+
+  const narrativeText = notState
+    ? (field.narrative?.notValueText || "")
+    : (field.narrative?.valueText || "");
+  const hasNarr = narrativeText.trim().length > 0;
 
   const inputBase = {
     width:"100%", padding:"7px 10px", fontSize:V.sm,
-    border:`1px solid ${notMode ? V.negative+"66" : isFilled ? V.positive+"66" : V.border}`,
-    borderRadius:V.r3, background:notMode?"#fff8f8":V.bgSurface,
+    border:`1px solid ${notState ? V.negative+"66" : isFilled ? V.positive+"66" : V.border}`,
+    borderRadius:V.r3, background:notState?"#fff8f8":V.bgSurface,
     color:V.textPrimary, outline:"none", fontFamily:V.font,
     boxSizing:"border-box", transition:"border-color .15s",
   };
 
-  // renderInput → see renderLiveFieldInput() top-level
   return (
     <div
       style={{borderRadius:V.r3,border:fieldBor,background:fieldBg,padding:`${V.s3} ${V.s3}`,marginBottom:V.s1,transition:"all .2s",cursor:hasNVorPN?"pointer":"default",userSelect:"none"}}
@@ -2734,6 +2791,198 @@ function RepeatableSectionInstance({sec, instanceIdx, total, onRemove, libraries
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ─── PreviewField: static field renderer used inside RepeatableSectionInstance ─
+// Renders a field without live values — shows label + placeholder/type hint.
+// For layout fields use FieldPreview instead.
+function PreviewField({ field, libraries }) {
+  const label = field.label || "Untitled Field";
+  const required = field.required;
+  const hint = field.helpText || "";
+  const ph = field.placeholder || "";
+  const inputBase = {
+    width:"100%", padding:"7px 10px", fontSize:V.sm,
+    border:`1px solid ${V.border}`, borderRadius:V.r3,
+    background:V.bgApp, color:V.textDisabled,
+    outline:"none", fontFamily:V.font, boxSizing:"border-box",
+  };
+  function renderControl() {
+    const t = field.type;
+    if (t==="long_text") return <textarea readOnly style={{...inputBase,resize:"none",rows:3,minHeight:72}} placeholder={ph||"Enter text…"}/>;
+    if (t==="date")   return <input readOnly type="date" style={inputBase}/>;
+    if (t==="time")   return <input readOnly type="time" style={inputBase}/>;
+    if (t==="number") return <input readOnly type="number" style={inputBase} placeholder={ph||"0"}/>;
+    if (t==="email")  return <input readOnly type="email" style={inputBase} placeholder={ph||"email@example.com"}/>;
+    if (t==="phone")  return <input readOnly type="tel" style={inputBase} placeholder={ph||"(555) 555-5555"}/>;
+    if (t==="url")    return <input readOnly type="url" style={inputBase} placeholder={ph||"https://…"}/>;
+    if (t==="dropdown" || t==="radio") {
+      const opts = field.options || [];
+      return (
+        <select disabled style={{...inputBase,cursor:"not-allowed"}}>
+          <option value="">{ph||"Select an option…"}</option>
+          {opts.map(o=><option key={o.id} value={o.id}>{o.label}</option>)}
+        </select>
+      );
+    }
+    if (t==="multi_select") {
+      const opts = field.options || [];
+      return (
+        <div style={{display:"flex",flexWrap:"wrap",gap:V.s1}}>
+          {opts.map(o=>(
+            <span key={o.id} style={{padding:"3px 10px",borderRadius:V.rFull,border:`1px solid ${V.border}`,fontSize:V.xs,fontFamily:V.font,color:V.textDisabled,background:V.bgApp}}>{o.label}</span>
+          ))}
+          {opts.length===0&&<span style={{fontSize:V.xs,color:V.textDisabled,fontFamily:V.font}}>No options defined</span>}
+        </div>
+      );
+    }
+    if (t==="checkbox") {
+      const opts = field.options || [];
+      return (
+        <div style={{display:"flex",flexDirection:"column",gap:V.s1}}>
+          {opts.map(o=>(
+            <label key={o.id} style={{display:"flex",alignItems:"center",gap:V.s2,fontSize:V.sm,fontFamily:V.font,color:V.textDisabled,cursor:"not-allowed"}}>
+              <input type="checkbox" disabled style={{width:14,height:14}}/>
+              {o.label}
+            </label>
+          ))}
+        </div>
+      );
+    }
+    if (t==="rating") {
+      const max = field.settings?.max || 5;
+      return (
+        <div style={{display:"flex",gap:V.s1}}>
+          {Array.from({length:max}).map((_,i)=>(
+            <span key={i} style={{fontSize:20,color:V.borderLight,cursor:"not-allowed"}}>★</span>
+          ))}
+        </div>
+      );
+    }
+    if (t==="scale") {
+      const min = field.settings?.min ?? 1;
+      const max = field.settings?.max ?? 10;
+      const minLbl = field.settings?.minLabel || "";
+      const maxLbl = field.settings?.maxLabel || "";
+      return (
+        <div>
+          <div style={{display:"flex",gap:V.s1,marginBottom:V.s1}}>
+            {Array.from({length:(max-min+1)}).map((_,i)=>(
+              <button key={i} disabled style={{flex:1,padding:"5px 0",border:`1px solid ${V.border}`,borderRadius:V.r2,background:V.bgApp,color:V.textDisabled,fontSize:V.xs,fontFamily:V.font,cursor:"not-allowed"}}>{min+i}</button>
+            ))}
+          </div>
+          {(minLbl||maxLbl)&&<div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:V.textDisabled,fontFamily:V.font}}><span>{minLbl}</span><span>{maxLbl}</span></div>}
+        </div>
+      );
+    }
+    if (t==="file") return <div style={{...inputBase,display:"flex",alignItems:"center",gap:V.s2,cursor:"not-allowed",color:V.textDisabled,justifyContent:"center",border:`1px dashed ${V.border}`}}>↑ Upload file</div>;
+    if (t==="signature") return <div style={{...inputBase,height:80,display:"flex",alignItems:"center",justifyContent:"center",cursor:"not-allowed",color:V.textDisabled,borderStyle:"dashed"}}>✍ Signature area</div>;
+    return <input readOnly style={inputBase} placeholder={ph||"Enter text…"}/>;
+  }
+  return (
+    <div style={{marginBottom:V.s3}}>
+      <label style={{display:"block",fontSize:V.sm,fontWeight:600,color:V.textSecondary,fontFamily:V.font,marginBottom:4}}>
+        {label}{required&&<span style={{color:V.negative,marginLeft:2}}>*</span>}
+      </label>
+      {renderControl()}
+      {hint&&<div style={{fontSize:V.xs,color:V.textDisabled,marginTop:4,fontFamily:V.font,lineHeight:1.5}}>{hint}</div>}
+    </div>
+  );
+}
+
+// ─── LiveSection: interactive section for preview (uses LiveField + required tracking) ─
+// This is the live/interactive version of PreviewSection used inside PreviewPageBody.
+// Props: sec, showTitle, values, notValues, onValue, onNotValue, libraries, onOpenDrawer
+function LiveSection({ sec, showTitle, values, notValues, onValue, onNotValue, libraries, onOpenDrawer }) {
+  const isRepeatable = !!sec.settings?.repeatable;
+  const max = sec.settings?.maxRepeats || 10;
+  const btnLabel = sec.settings?.repeatLabel || "+ Add Another";
+  const [instances, setInstances] = useState([uid()]);
+
+  const addInstance = () => { if (instances.length < max) setInstances(p=>[...p, uid()]); };
+  const removeInstance = (id) => { if (instances.length > 1) setInstances(p=>p.filter(x=>x!==id)); };
+  const atMax = instances.length >= max;
+
+  const secFields = [];
+  (sec.rows||[]).forEach(row=>(row.cells||[]).forEach(cell=>cell.fields.forEach(f=>{
+    if(f.required&&!["description","divider"].includes(f.type)) secFields.push(f);
+  })));
+  const {total, filled} = countRequired(secFields.map(f=>({field:f})), values, notValues);
+
+  return (
+    <div>
+      {showTitle && (
+        <div style={{display:"flex",alignItems:"center",gap:V.s2,marginBottom:V.s3}}>
+          <div style={{width:3,minHeight:20,background:V.primary,borderRadius:V.rFull,alignSelf:"stretch"}}/>
+          <div style={{flex:1}}>
+            <div style={{fontWeight:700,fontSize:V.md,color:V.primary,fontFamily:V.font}}>{sec.title}</div>
+            {isRepeatable&&<span style={{fontSize:V.xs,color:V.textSecondary,fontFamily:V.font}}>{instances.length} of {max} {instances.length===1?"entry":"entries"}</span>}
+          </div>
+          {total>0&&<RequiredBadge filled={filled} total={total} onClick={()=>onOpenDrawer&&onOpenDrawer("section",sec.id)}/>}
+        </div>
+      )}
+
+      {isRepeatable ? (
+        <>
+          {instances.map((instId, idx)=>(
+            <div key={instId} style={{border:`1.5px solid ${V.borderLight}`,borderRadius:V.r4,marginBottom:V.s3,overflow:"hidden"}}>
+              {instances.length>1&&(
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:`${V.s2} ${V.s3}`,borderBottom:`1px solid ${V.borderLight}`,background:V.bgApp}}>
+                  <span style={{fontSize:V.xs,fontWeight:700,color:V.textSecondary,fontFamily:V.font}}>Entry {idx+1}</span>
+                  <button onClick={()=>removeInstance(instId)} style={{background:"none",border:"none",cursor:"pointer",color:V.textDisabled,fontSize:14,padding:0,lineHeight:1}} onMouseEnter={e=>e.target.style.color=V.negative} onMouseLeave={e=>e.target.style.color=V.textDisabled}>×</button>
+                </div>
+              )}
+              <div style={{padding:`${V.s3} ${V.s4}`}}>
+                {sec.rows.map(row=>(
+                  <div key={row.id+"-"+instId} style={{display:"flex",gap:V.s4,marginBottom:V.s3}}>
+                    {row.cells.map((cell,ci)=>(
+                      <div key={cell.id} style={{flex:row.preset.cols[ci],minWidth:0,display:"flex",flexDirection:"column",gap:V.s2}}>
+                        {cell.fields.map(f=>{
+                          const isL=["description","divider"].includes(f.type);
+                          return (
+                            <div key={f.id}>
+                              {isL ? <FieldPreview field={f}/> : <LiveField field={f} values={values} notValues={notValues} onValue={onValue} onNotValue={onNotValue} libraries={libraries}/>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          <button onClick={addInstance} disabled={atMax}
+            style={{width:"100%",padding:`${V.s3} ${V.s4}`,border:`2px dashed ${atMax?V.borderLight:V.primary}`,borderRadius:V.r4,background:atMax?"transparent":V.primaryBg,color:atMax?V.textDisabled:V.primary,fontSize:V.sm,fontWeight:700,fontFamily:V.font,cursor:atMax?"not-allowed":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:V.s2,transition:"all .15s",marginBottom:V.s2}}
+            onMouseEnter={e=>{if(!atMax)e.currentTarget.style.background=V.bgSelected;}}
+            onMouseLeave={e=>{if(!atMax)e.currentTarget.style.background=V.primaryBg;}}
+          >
+            <span style={{fontSize:16,fontWeight:300}}>+</span>
+            {atMax ? `Maximum ${max} entries reached` : btnLabel}
+          </button>
+        </>
+      ) : (
+        <div>
+          {sec.rows.map(row=>(
+            <div key={row.id} style={{display:"flex",gap:V.s4,marginBottom:V.s3}}>
+              {row.cells.map((cell,ci)=>(
+                <div key={cell.id} style={{flex:row.preset.cols[ci],minWidth:0,display:"flex",flexDirection:"column",gap:V.s2}}>
+                  {cell.fields.map(f=>{
+                    const isL=["description","divider"].includes(f.type);
+                    return (
+                      <div key={f.id}>
+                        {isL ? <FieldPreview field={f}/> : <LiveField field={f} values={values} notValues={notValues} onValue={onValue} onNotValue={onNotValue} libraries={libraries}/>}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -3364,7 +3613,7 @@ function PreviewModal({form,onClose}){
           </div>
         ) : (
           /* Desktop: no frame, just center the form card */
-          <FormComponent/>
+          <PreviewFormComponent layout={layout} form={form} libs={libs} onClose={onClose} maxW={null}/>
         )}
       </div>
     </div>
@@ -4095,7 +4344,7 @@ function FormSettingsPage({ form, onChange, onBack }) {
 }
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
-export default function FormBuilder(){
+function FormBuilder(){
   const [form,setForm]=useState(INIT);
   const [activePId,setActivePId]=useState(INIT.pages[0].id);
   const [activeSId,setActiveSId]=useState(INIT.pages[0].sections[0].id);
@@ -4329,3 +4578,9 @@ export default function FormBuilder(){
     {showNarrative&&<NarrativeBuilder form={form} onUpdateTemplates={t=>setForm(f=>({...f,narrativeTemplates:t}))} onClose={()=>setNarrative(false)}/>}
   </div>;
 }
+const _root = ReactDOM.createRoot(document.getElementById("root"));
+_root.render(React.createElement(FormBuilder));
+
+  </script>
+</body>
+</html>

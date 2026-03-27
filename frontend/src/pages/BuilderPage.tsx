@@ -1,0 +1,764 @@
+import React from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import type { ColPreset, Field, Page, Row, Section } from '@fieldsaver/shared';
+import { V } from '../constants/design';
+import { Sidebar } from '../components/builder/Sidebar';
+import { FieldTypesSidebar } from '../components/builder/FieldTypesSidebar';
+import { Canvas } from '../components/builder/Canvas';
+import { SettingsPanel } from '../components/builder/SettingsPanel';
+import { PreviewModal } from '../components/preview/PreviewModal';
+import { useForm } from '../hooks/useForm';
+import { formsApi } from '../api/forms';
+
+// ─── TopBar ───────────────────────────────────────────────────────────────────
+
+interface TopBarProps {
+  formName: string;
+  onPreview: () => void;
+  onSettings: () => void;
+  onPublish: () => void;
+}
+
+function TopBar({
+  formName,
+  onPreview,
+  onSettings,
+  onPublish,
+}: TopBarProps) {
+  return (
+    <div
+      style={{
+        height: '60px',
+        flexShrink: 0,
+        backgroundColor: V.bgSurface,
+        borderBottom: `1px solid ${V.borderLight}`,
+        display: 'flex',
+        alignItems: 'center',
+        padding: `0 ${V.s4}`,
+        gap: V.s3,
+        zIndex: 20,
+      }}
+    >
+      {/* Left section: Form icon and name */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: V.s2,
+        }}
+      >
+        {/* Form icon */}
+        <div
+          style={{
+            width: '32px',
+            height: '32px',
+            borderRadius: '6px',
+            backgroundColor: V.primary,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#ffffff',
+            fontSize: '16px',
+            fontWeight: 700,
+            flexShrink: 0,
+          }}
+        >
+          ⊞
+        </div>
+
+        {/* Form name */}
+        <span
+          style={{
+            fontSize: V.md,
+            fontWeight: 600,
+            color: V.textPrimary,
+            fontFamily: V.font,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            maxWidth: '280px',
+          }}
+          title={formName}
+        >
+          {formName || 'Untitled Form'}
+        </span>
+      </div>
+
+      {/* Divider */}
+      <div
+        style={{
+          width: '1px',
+          height: '24px',
+          backgroundColor: V.borderLight,
+          margin: `0 ${V.s1}`,
+        }}
+      />
+
+      {/* Spacer */}
+      <div style={{ flex: 1 }} />
+
+      {/* Right section: Action buttons */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: V.s2,
+        }}
+      >
+        {/* Narrative button */}
+        <button
+          type="button"
+          onClick={() => {/* TODO: open narrative builder */}}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: V.s1,
+            padding: `${V.s2} ${V.s3}`,
+            border: 'none',
+            borderRadius: V.r2,
+            backgroundColor: 'transparent',
+            color: V.textSecondary,
+            cursor: 'pointer',
+            fontSize: V.sm,
+            fontFamily: V.font,
+            transition: 'color 0.12s, background-color 0.12s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = V.bgHover;
+            e.currentTarget.style.color = V.textPrimary;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.color = V.textSecondary;
+          }}
+          title="Narrative builder"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 3h12M2 7h12M2 11h8"/>
+          </svg>
+          Narrative
+        </button>
+
+        {/* Settings button */}
+        <button
+          type="button"
+          onClick={onSettings}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: V.s1,
+            padding: `${V.s2} ${V.s3}`,
+            border: 'none',
+            borderRadius: V.r2,
+            backgroundColor: 'transparent',
+            color: V.textSecondary,
+            cursor: 'pointer',
+            fontSize: V.sm,
+            fontFamily: V.font,
+            transition: 'color 0.12s, background-color 0.12s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = V.bgHover;
+            e.currentTarget.style.color = V.textPrimary;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.color = V.textSecondary;
+          }}
+          title="Form settings"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="8" cy="8" r="2"/>
+            <path d="M8 1v2M8 13v2M15 8h-2M3 8H1M13 3l-1.4 1.4M4.4 12.6L3 14M13 13l-1.4-1.4M4.4 3.4L3 2"/>
+          </svg>
+          Settings
+        </button>
+
+        {/* Libraries button */}
+        <button
+          type="button"
+          onClick={() => {/* TODO: open libraries panel */}}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: V.s1,
+            padding: `${V.s2} ${V.s3}`,
+            border: 'none',
+            borderRadius: V.r2,
+            backgroundColor: 'transparent',
+            color: V.textSecondary,
+            cursor: 'pointer',
+            fontSize: V.sm,
+            fontFamily: V.font,
+            transition: 'color 0.12s, background-color 0.12s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = V.bgHover;
+            e.currentTarget.style.color = V.textPrimary;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.color = V.textSecondary;
+          }}
+          title="Data libraries"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 4h12M2 8h12M2 12h12M1 2v12c0 .5.5 1 1 1h12c.5 0 1-.5 1-1V2"/>
+          </svg>
+          Libraries
+        </button>
+
+        {/* Export button */}
+        <button
+          type="button"
+          onClick={() => {/* TODO: export form */}}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: V.s1,
+            padding: `${V.s2} ${V.s3}`,
+            border: 'none',
+            borderRadius: V.r2,
+            backgroundColor: 'transparent',
+            color: V.textSecondary,
+            cursor: 'pointer',
+            fontSize: V.sm,
+            fontFamily: V.font,
+            transition: 'color 0.12s, background-color 0.12s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = V.bgHover;
+            e.currentTarget.style.color = V.textPrimary;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.color = V.textSecondary;
+          }}
+          title="Export form"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M8 1v10M3 6l5 5 5-5M2 14h12"/>
+          </svg>
+          Export
+        </button>
+
+        {/* Preview button - outlined */}
+        <button
+          type="button"
+          onClick={onPreview}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: V.s1,
+            padding: `${V.s2} ${V.s3}`,
+            border: `1px solid ${V.border}`,
+            borderRadius: V.r2,
+            backgroundColor: V.bgSurface,
+            color: V.textSecondary,
+            cursor: 'pointer',
+            fontSize: V.sm,
+            fontFamily: V.font,
+            transition: 'all 0.12s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = V.primary;
+            e.currentTarget.style.color = V.primary;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = V.border;
+            e.currentTarget.style.color = V.textSecondary;
+          }}
+          title="Preview form"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M8 3C4 3 1 8 1 8s3 5 7 5 7-5 7-5-3-5-7-5zM8 10a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/>
+          </svg>
+          Preview
+        </button>
+
+        {/* Publish button - primary */}
+        <button
+          type="button"
+          onClick={onPublish}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: V.s1,
+            padding: `${V.s2} ${V.s4}`,
+            border: 'none',
+            borderRadius: V.r2,
+            backgroundColor: V.primary,
+            color: '#ffffff',
+            cursor: 'pointer',
+            fontSize: V.sm,
+            fontWeight: 600,
+            fontFamily: V.font,
+            transition: 'all 0.12s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#4a47a3';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = V.primary;
+          }}
+          title="Publish form"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 8l4 4 8-10"/>
+          </svg>
+          Publish
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── LoadingScreen ────────────────────────────────────────────────────────────
+
+function LoadingScreen() {
+  return (
+    <div
+      style={{
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: V.bgApp,
+        flexDirection: 'column',
+        gap: V.s4,
+      }}
+    >
+      <div
+        style={{
+          width: '32px',
+          height: '32px',
+          borderRadius: '50%',
+          border: `3px solid ${V.borderLight}`,
+          borderTopColor: V.primary,
+          animation: 'spin 0.8s linear infinite',
+        }}
+      />
+      <span style={{ color: V.textSecondary, fontSize: V.sm, fontFamily: V.font }}>
+        Loading form…
+      </span>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
+// ─── ErrorScreen ──────────────────────────────────────────────────────────────
+
+interface ErrorScreenProps {
+  message: string;
+  onBack: () => void;
+}
+
+function ErrorScreen({ message, onBack }: ErrorScreenProps) {
+  return (
+    <div
+      style={{
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: V.bgApp,
+        flexDirection: 'column',
+        gap: V.s4,
+      }}
+    >
+      <div style={{ fontSize: '36px' }}>⚠️</div>
+      <div style={{ fontSize: V.md, color: V.textPrimary, fontFamily: V.font, fontWeight: 600 }}>
+        Failed to load form
+      </div>
+      <div style={{ fontSize: V.sm, color: V.textSecondary, fontFamily: V.font }}>{message}</div>
+      <button
+        type="button"
+        onClick={onBack}
+        style={{
+          padding: `${V.s2} ${V.s4}`,
+          border: `1px solid ${V.border}`,
+          borderRadius: V.r3,
+          backgroundColor: V.bgSurface,
+          color: V.textPrimary,
+          cursor: 'pointer',
+          fontSize: V.sm,
+          fontFamily: V.font,
+        }}
+      >
+        Back to forms
+      </button>
+    </div>
+  );
+}
+
+// ─── BuilderPage ──────────────────────────────────────────────────────────────
+
+export function BuilderPage() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+
+  if (!id) {
+    navigate('/forms', { replace: true });
+    return null;
+  }
+
+  return <BuilderPageInner formId={id} />;
+}
+
+// Inner component so we always have a valid formId string
+interface BuilderPageInnerProps {
+  formId: string;
+}
+
+// ─── Drag types ───────────────────────────────────────────────────────────────
+
+interface ColumnDrag {
+  cellId: string;
+  rowId: string;
+  fields: any[];
+  span: number;
+}
+
+// ─── BuilderPageInner ─────────────────────────────────────────────────────────
+
+function BuilderPageInner({ formId }: BuilderPageInnerProps) {
+  const navigate = useNavigate();
+  const [showPreview, setShowPreview] = React.useState(false);
+  const [columnDrag, setColumnDrag] = React.useState<ColumnDrag | null>(null);
+
+  const {
+    isLoading,
+    loadError,
+    formName,
+    formStatus,
+    activePId,
+    activeSId,
+    selectedFieldId,
+    pages,
+    activePage,
+    activeSection,
+    selectedField,
+    addField,
+    updateField,
+    deleteField,
+    moveField,
+    addRow,
+    deleteRow,
+    addSection,
+    deleteSection,
+    updateSection,
+    addPage,
+    deletePage,
+    renamePage,
+    updatePage,
+    setActivePage,
+    setActiveSection,
+    setSelectedField,
+    save,
+  } = useForm(formId);
+
+  const handlePublish = async () => {
+    try {
+      await formsApi.publish(formId);
+      // Reload to reflect published status
+      await save();
+    } catch {
+      // handle silently; TODO: toast
+    }
+  };
+
+  const handlePreview = () => {
+    setShowPreview(true);
+  };
+
+  const handleUpdateField = React.useCallback(
+    (patch: Partial<Field>) => {
+      if (selectedFieldId) updateField(selectedFieldId, patch);
+    },
+    [selectedFieldId, updateField],
+  );
+
+  const handleUpdatePage = React.useCallback(
+    (patch: Partial<Page>) => {
+      if (activePId) updatePage(activePId, patch);
+    },
+    [activePId, updatePage],
+  );
+
+  const handleAddRowForActiveSection = React.useCallback(
+    (preset: ColPreset) => {
+      addRow(preset);
+    },
+    [addRow],
+  );
+
+  const handleUpdateSectionCb = React.useCallback(
+    (secId: string, patch: Partial<Section>) => {
+      updateSection(secId, patch);
+    },
+    [updateSection],
+  );
+
+  const handleDeleteSectionCb = React.useCallback(
+    (secId: string) => {
+      deleteSection(secId);
+    },
+    [deleteSection],
+  );
+
+  const handleUpdateRowCb = React.useCallback(
+    (rowId: string, patch: Partial<Row>) => {
+      if (!activeSId || !activeSection) return;
+      const updatedRows = activeSection.rows.map((row) =>
+        row.id === rowId ? { ...row, ...patch } : row
+      );
+      updateSection(activeSId, { rows: updatedRows });
+    },
+    [activeSId, activeSection, updateSection],
+  );
+
+  const handleUpdateSection = React.useCallback(
+    (secId: string, patch: Partial<Section>) => {
+      updateSection(secId, patch);
+    },
+    [updateSection],
+  );
+
+  // Select first section when changing to a new section
+  const handleSelectSection = React.useCallback(
+    (secId: string) => {
+      setActiveSection(secId);
+      setSelectedField(null);
+    },
+    [setActiveSection, setSelectedField],
+  );
+
+  const handleSelectField = React.useCallback(
+    (fieldId: string) => {
+      if (fieldId) setSelectedField(fieldId);
+    },
+    [setSelectedField],
+  );
+
+  const handleDeleteField = React.useCallback(
+    (fieldId: string) => {
+      deleteField(fieldId);
+    },
+    [deleteField],
+  );
+
+  // Sidebar section delete: switch to the target page first, then delete
+  const handleSidebarDeleteSection = React.useCallback(
+    (pageId: string, secId: string) => {
+      setActivePage(pageId);
+      deleteSection(secId);
+    },
+    [setActivePage, deleteSection],
+  );
+
+  const handleSidebarAddSection = React.useCallback(
+    (pageId: string) => {
+      setActivePage(pageId);
+      addSection();
+    },
+    [setActivePage, addSection],
+  );
+
+  const handleColumnDropToSection = React.useCallback(
+    (pageId: string, secId: string) => {
+      if (!columnDrag || !activeSId || !activeSection) return;
+
+      // Update source section (remove cell from source row)
+      const { rowId, fields } = columnDrag;
+      const sourceRow = activeSection.rows.find((r) => r.id === rowId);
+      if (!sourceRow) return;
+
+      let updatedRows = activeSection.rows;
+      const cellIndex = sourceRow.cells.findIndex((c) => c.id === columnDrag.cellId);
+      if (cellIndex >= 0) {
+        const newCells = sourceRow.cells.filter((_, cellIdx) => cellIdx !== cellIndex);
+        if (newCells.length === 0) {
+          // Remove row if no cells left
+          updatedRows = updatedRows.filter((r) => r.id !== rowId);
+        } else {
+          // Redistribute column spans evenly
+          const newSpan = Math.floor(12 / newCells.length);
+          const remainder = 12 % newCells.length;
+          const newCols = newCells.map((_, idx) => (idx === 0 ? newSpan + remainder : newSpan));
+
+          updatedRows = updatedRows.map((r) =>
+            r.id === rowId
+              ? {
+                  ...r,
+                  cells: newCells,
+                  preset: { ...r.preset, cols: newCols, label: 'Custom' },
+                }
+              : r
+          );
+        }
+      }
+
+      // Update source section
+      if (activeSId !== secId) {
+        updateSection(activeSId, { rows: updatedRows });
+      }
+
+      // Add new row to target section with all fields as single full-width cell
+      const newRow: Row = {
+        id: crypto.randomUUID(),
+        preset: { label: 'Full Width', cols: [12], hint: '' },
+        cells: [
+          {
+            id: crypto.randomUUID(),
+            fields,
+          },
+        ],
+      };
+
+      // Update target section
+      setActivePage(pageId);
+      setActiveSection(secId);
+      updateSection(secId, { rows: [newRow] });
+
+      // Clear drag state
+      setColumnDrag(null);
+    },
+    [columnDrag, activeSId, activeSection, updateSection, setActivePage, setActiveSection],
+  );
+
+
+  if (isLoading) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+        <LoadingScreen />
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+        <ErrorScreen message={loadError} onBack={() => navigate('/forms')} />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh',
+        overflow: 'hidden',
+        backgroundColor: V.bgApp,
+        fontFamily: V.font,
+      }}
+    >
+      {/* Top bar */}
+      <TopBar
+        formName={formName}
+        onPreview={handlePreview}
+        onSettings={() => {/* TODO: open form settings */}}
+        onPublish={handlePublish}
+      />
+
+      {/* Three-panel body */}
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Left: Pages/Sections Sidebar */}
+        <Sidebar
+          pages={pages}
+          activePId={activePId}
+          activeSId={activeSId}
+          onSelectPage={setActivePage}
+          onSelectSection={handleSelectSection}
+          onAddPage={addPage}
+          onDeletePage={deletePage}
+          onRenamePage={renamePage}
+          onAddSection={handleSidebarAddSection}
+          onDeleteSection={handleSidebarDeleteSection}
+          onUpdateSection={handleUpdateSection}
+          columnDrag={columnDrag}
+        />
+
+        {/* Center-Left: Field Types Sidebar */}
+        <FieldTypesSidebar onAddField={addField} />
+
+        {/* Center: Canvas */}
+        <Canvas
+          activePage={activePage}
+          activeSId={activeSId}
+          activePageId={activePId}
+          selectedFieldId={selectedFieldId}
+          onSelectSection={handleSelectSection}
+          onSelectField={handleSelectField}
+          onDeleteField={handleDeleteField}
+          onDeleteRow={deleteRow}
+          onMoveField={moveField}
+          onDeleteSection={handleDeleteSectionCb}
+          onAddRow={handleAddRowForActiveSection}
+          onUpdateSection={handleUpdateSectionCb}
+          onUpdateRow={handleUpdateRowCb}
+          onAddSection={addSection}
+          onColumnDragStart={setColumnDrag}
+          onColumnDropToSection={handleColumnDropToSection}
+          columnDrag={columnDrag}
+        />
+
+        {/* Right: Settings panel */}
+        <SettingsPanel
+          selectedField={selectedField}
+          activePage={activePage ? { id: activePage.id, title: activePage.title, description: activePage.description, sections: activePage.sections } : null}
+          onUpdateField={handleUpdateField}
+          onUpdatePage={handleUpdatePage}
+        />
+      </div>
+
+      {/* Preview Modal */}
+      {showPreview && (
+        <PreviewModal
+          form={{
+            id: formId,
+            userId: 'current-user-id',
+            name: formName,
+            description: activePage?.description || '',
+            data: {
+              pages,
+              libraries: [],
+              narrativeTemplates: [],
+            },
+            settings: {
+              submitLabel: 'Submit',
+              successMessage: 'Thank you! Your response has been submitted.',
+              redirectUrl: '',
+              showProgress: true,
+              allowDraft: false,
+              formLayout: 'progress',
+              brandColor: '',
+              showPageNumbers: false,
+              mondayBoardId: '',
+              mondayGroupId: '',
+              webhookUrl: '',
+              notifyEmails: '',
+              dateFormat: 'MM/DD/YYYY',
+              emptyFieldHandling: 'omit',
+              retentionDays: 90,
+            },
+            status: formStatus as any,
+            publishedAt: null,
+            version: 1,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            deletedAt: null,
+          }}
+          onClose={() => setShowPreview(false)}
+        />
+      )}
+    </div>
+  );
+}

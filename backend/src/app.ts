@@ -6,9 +6,10 @@ import { errorHandler } from './middleware/error-handler';
 import { notFound } from './middleware/not-found';
 
 // Route imports — add new routers here
-// import { formsRouter } from './api/forms';
-// import { librariesRouter } from './api/libraries';
-// import { authRouter } from './api/auth';
+import formsRouter from './api/forms';
+import librariesRouter from './api/libraries';
+import authRouter, { meHandler } from './api/auth';
+import { authenticate } from './middleware/auth';
 // import { submissionsRouter } from './api/submissions';
 // import { mondayRouter } from './api/monday';
 
@@ -30,9 +31,12 @@ export function createApp() {
   });
 
   // ── API v1 Routes ───────────────────────────────────────────────────────────
-  // app.use('/api/v1/auth',        authRouter);
-  // app.use('/api/v1/forms',       formsRouter);
-  // app.use('/api/v1/libraries',   librariesRouter);
+  // Auth: POST /api/v1/auth/register, /login, /refresh, /logout
+  app.use('/api/v1/auth',        authRouter);
+  // Current user: GET /api/v1/me  (per API convention, lives outside /auth prefix)
+  app.get('/api/v1/me',          authenticate, meHandler);
+  app.use('/api/v1/forms',       formsRouter);
+  app.use('/api/v1/libraries',   librariesRouter);
   // app.use('/api/v1/monday',      mondayRouter);
 
   // ── Error Handling ──────────────────────────────────────────────────────────
