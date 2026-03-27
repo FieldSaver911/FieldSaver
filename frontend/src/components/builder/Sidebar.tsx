@@ -134,6 +134,8 @@ interface PageItemProps {
   onRenamePage: (pageId: string, title: string) => void;
   isOnlyPage: boolean;
   columnDrag?: ColumnDrag | null;
+  isExpanded?: boolean;
+  onToggleExpand?: (pageId: string) => void;
 }
 
 function PageItem({
@@ -148,21 +150,18 @@ function PageItem({
   onRenamePage,
   isOnlyPage,
   columnDrag,
+  isExpanded,
+  onToggleExpand,
 }: PageItemProps) {
-  const [expanded, setExpanded] = React.useState(isActivePage);
+  const expanded = isExpanded ?? isActivePage;
   const [isHovered, setIsHovered] = React.useState(false);
   const [isEditing, setIsEditing] = React.useState(false);
   const [editValue, setEditValue] = React.useState(page.title);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
-  // Auto-expand when this page becomes active
-  React.useEffect(() => {
-    if (isActivePage) setExpanded(true);
-  }, [isActivePage]);
-
   const handlePageClick = () => {
     onSelectPage(page.id);
-    setExpanded((v) => !v);
+    onToggleExpand?.(page.id);
   };
 
   const handleStartEdit = (e: React.MouseEvent) => {
@@ -340,6 +339,10 @@ export interface SidebarProps {
   onAddSection: (pageId: string) => void;
   onDeleteSection: (pageId: string, secId: string) => void;
   columnDrag?: ColumnDrag | null;
+  expandedPages?: Set<string>;
+  onTogglePageExpand?: (pageId: string) => void;
+  onExpandAllPages?: () => void;
+  onCollapseAllPages?: () => void;
 }
 
 export function Sidebar({
@@ -354,6 +357,10 @@ export function Sidebar({
   onAddSection,
   onDeleteSection,
   columnDrag,
+  expandedPages,
+  onTogglePageExpand,
+  onExpandAllPages,
+  onCollapseAllPages,
 }: SidebarProps) {
   const [collapsed, setCollapsed] = React.useState(false);
 
@@ -422,61 +429,158 @@ export function Sidebar({
           flexShrink: 0,
         }}
       >
-        <span
-          style={{
-            fontSize: V.xs,
-            fontWeight: 700,
-            color: V.sidebarMuted,
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-            fontFamily: V.font,
-          }}
-        >
-          Pages
-        </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: V.s2 }}>
+          <span
+            style={{
+              fontSize: V.xs,
+              fontWeight: 700,
+              color: V.sidebarMuted,
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              fontFamily: V.font,
+            }}
+          >
+            Pages
+          </span>
           <button
             type="button"
             onClick={onAddPage}
             title="Add page"
             style={{
-              border: 'none',
+              width: '28px',
+              height: '28px',
+              border: `1.5px solid ${V.sidebarBorder}`,
               background: 'transparent',
               color: V.sidebarMuted,
               cursor: 'pointer',
-              fontSize: '16px',
-              padding: 0,
+              borderRadius: V.r2,
               display: 'flex',
               alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '16px',
               lineHeight: 1,
-              transition: 'color 0.12s',
+              transition: 'all 0.12s',
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = V.sidebarText; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = V.sidebarMuted; }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = V.sidebarText;
+              e.currentTarget.style.borderColor = V.sidebarText;
+              e.currentTarget.style.backgroundColor = V.sidebarHover;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = V.sidebarMuted;
+              e.currentTarget.style.borderColor = V.sidebarBorder;
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
           >
             +
           </button>
+        </div>
+        <button
+          type="button"
+          onClick={() => setCollapsed(true)}
+          title="Collapse Pages"
+          style={{
+            border: 'none',
+            background: 'transparent',
+            color: V.sidebarMuted,
+            cursor: 'pointer',
+            padding: 0,
+            display: 'flex',
+            alignItems: 'center',
+            lineHeight: 1,
+            transition: 'color 0.12s',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = V.sidebarText; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = V.sidebarMuted; }}
+        >
+          <SidebarCollapseIcon collapsed={false} size={16} color="currentColor" />
+        </button>
+      </div>
+
+      {/* Expand/Collapse All Controls */}
+      <div
+        style={{
+          height: '40px',
+          padding: `0 ${V.s2}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 0,
+          borderBottom: `1px solid ${V.sidebarBorder}`,
+          flexShrink: 0,
+          backgroundColor: V.sidebarBg,
+        }}
+      >
+        {/* Expand All Pages button */}
+        {onExpandAllPages && (
           <button
             type="button"
-            onClick={() => setCollapsed(true)}
-            title="Collapse Pages"
+            onClick={onExpandAllPages}
+            title="Expand all pages"
             style={{
+              flex: 1,
+              border: 'none',
+              borderRight: `1px solid ${V.sidebarBorder}`,
+              background: 'transparent',
+              color: V.sidebarMuted,
+              cursor: 'pointer',
+              padding: `${V.s2} ${V.s1}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              lineHeight: 1,
+              transition: 'color 0.12s, background-color 0.12s',
+              fontSize: V.xs,
+              fontFamily: V.font,
+              fontWeight: 500,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = V.sidebarText;
+              e.currentTarget.style.backgroundColor = V.sidebarHover;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = V.sidebarMuted;
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
+          >
+            Expand All
+          </button>
+        )}
+
+        {/* Collapse All Pages button */}
+        {onCollapseAllPages && (
+          <button
+            type="button"
+            onClick={onCollapseAllPages}
+            title="Collapse all pages"
+            style={{
+              flex: 1,
               border: 'none',
               background: 'transparent',
               color: V.sidebarMuted,
               cursor: 'pointer',
-              padding: 0,
+              padding: `${V.s2} ${V.s1}`,
               display: 'flex',
               alignItems: 'center',
+              justifyContent: 'center',
               lineHeight: 1,
-              transition: 'color 0.12s',
+              transition: 'color 0.12s, background-color 0.12s',
+              fontSize: V.xs,
+              fontFamily: V.font,
+              fontWeight: 500,
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = V.sidebarText; }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = V.sidebarMuted; }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = V.sidebarText;
+              e.currentTarget.style.backgroundColor = V.sidebarHover;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = V.sidebarMuted;
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
           >
-            <SidebarCollapseIcon collapsed={false} size={16} color="currentColor" />
+            Collapse All
           </button>
-        </div>
+        )}
       </div>
 
       {/* Pages list */}
@@ -495,6 +599,8 @@ export function Sidebar({
             onRenamePage={onRenamePage}
             isOnlyPage={pages.length === 1}
             columnDrag={columnDrag}
+            isExpanded={expandedPages.has(page.id) || (activePId === page.id)}
+            onToggleExpand={onTogglePageExpand}
           />
         ))}
       </div>

@@ -987,6 +987,9 @@ interface SectionViewProps {
   sortableSectionListeners?: Record<string, any>;
   sortableSectionStyle?: React.CSSProperties;
   sortableSectionIsDragging?: boolean;
+  // Controlled collapse state
+  isCollapsed?: boolean;
+  onToggleCollapse?: (sectionId: string) => void;
 }
 
 function SectionView({
@@ -1014,8 +1017,10 @@ function SectionView({
   sortableSectionListeners,
   sortableSectionStyle,
   sortableSectionIsDragging,
+  isCollapsed = false,
+  onToggleCollapse,
 }: SectionViewProps) {
-  const [collapsed, setCollapsed] = React.useState(false);
+  const collapsed = isCollapsed;
   const [showRowMenu, setShowRowMenu] = React.useState(false);
   const [addRowHovered, setAddRowHovered] = React.useState(false);
   const [buttonPos, setButtonPos] = React.useState<{ top: number; left: number; width: number } | null>(null);
@@ -1054,7 +1059,7 @@ function SectionView({
           userSelect: 'none',
           backgroundColor: V.bgSurface,
         }}
-        onClick={(e) => { e.stopPropagation(); setCollapsed((c) => !c); }}
+        onClick={(e) => { e.stopPropagation(); onToggleCollapse?.(section.id); }}
       >
         {/* Drag handle — ONLY this element is draggable */}
         <span
@@ -1328,6 +1333,7 @@ export function Canvas({
 }: CanvasProps) {
   const [addSectionHovered, setAddSectionHovered] = React.useState(false);
   const [dragState, setDragState] = React.useState<DragState | null>(null);
+  const [collapsedSections, setCollapsedSections] = React.useState<Set<string>>(new Set());
 
   const handleCanvasDragStart = React.useCallback((cellId: string, index: number) => {
     setDragState({ sourceCellId: cellId, sourceIndex: index });
@@ -1344,6 +1350,28 @@ export function Canvas({
 
   const handleCanvasDragEnd = React.useCallback(() => {
     setDragState(null);
+  }, []);
+
+  const handleExpandAll = React.useCallback(() => {
+    setCollapsedSections(new Set());
+  }, []);
+
+  const handleCollapseAll = React.useCallback(() => {
+    if (activePage) {
+      setCollapsedSections(new Set(activePage.sections.map(s => s.id)));
+    }
+  }, [activePage]);
+
+  const toggleSectionCollapse = React.useCallback((sectionId: string) => {
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(sectionId)) {
+        next.delete(sectionId);
+      } else {
+        next.add(sectionId);
+      }
+      return next;
+    });
   }, []);
 
   if (!activePage) {
@@ -1406,33 +1434,104 @@ export function Canvas({
           <span style={{ fontWeight: 600, color: V.textPrimary }}>Sections</span>
         </div>
 
-        {/* Add section */}
-        <button
-          type="button"
-          onClick={() => onAddSection(activePageId ?? undefined)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: V.s1,
-            padding: `${V.s2} ${V.s4}`,
-            border: `1.5px dashed ${addSectionHovered ? V.primary : V.border}`,
-            borderRadius: V.r3,
-            backgroundColor: addSectionHovered ? V.bgHighlight : 'transparent',
-            color: addSectionHovered ? V.primary : V.textSecondary,
-            cursor: 'pointer',
-            fontSize: V.sm,
-            fontFamily: V.font,
-            fontWeight: 500,
-            transition: 'all 0.12s',
-            height: 'fit-content',
-          }}
-          onMouseEnter={() => setAddSectionHovered(true)}
-          onMouseLeave={() => setAddSectionHovered(false)}
-          title="Add section"
-        >
-          <IconPlus />
-          Add Section
-        </button>
+        {/* Right section: Expand/Collapse + Add Section buttons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: V.s2 }}>
+          {/* Expand All button */}
+          <button
+            type="button"
+            onClick={handleExpandAll}
+            title="Expand all sections"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: V.s1,
+              padding: `${V.s2} ${V.s3}`,
+              border: `1px solid ${V.border}`,
+              borderRadius: V.r3,
+              backgroundColor: 'transparent',
+              color: V.textSecondary,
+              cursor: 'pointer',
+              fontSize: V.sm,
+              fontFamily: V.font,
+              fontWeight: 500,
+              transition: 'all 0.12s',
+              height: 'fit-content',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = V.primary;
+              e.currentTarget.style.color = V.primary;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = V.border;
+              e.currentTarget.style.color = V.textSecondary;
+            }}
+          >
+            <IconChevronDown size={14} />
+            Expand All
+          </button>
+
+          {/* Collapse All button */}
+          <button
+            type="button"
+            onClick={handleCollapseAll}
+            title="Collapse all sections"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: V.s1,
+              padding: `${V.s2} ${V.s3}`,
+              border: `1px solid ${V.border}`,
+              borderRadius: V.r3,
+              backgroundColor: 'transparent',
+              color: V.textSecondary,
+              cursor: 'pointer',
+              fontSize: V.sm,
+              fontFamily: V.font,
+              fontWeight: 500,
+              transition: 'all 0.12s',
+              height: 'fit-content',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = V.primary;
+              e.currentTarget.style.color = V.primary;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = V.border;
+              e.currentTarget.style.color = V.textSecondary;
+            }}
+          >
+            <IconChevronRight size={14} />
+            Collapse All
+          </button>
+
+          {/* Add section */}
+          <button
+            type="button"
+            onClick={() => onAddSection(activePageId ?? undefined)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: V.s1,
+              padding: `${V.s2} ${V.s4}`,
+              border: `1.5px dashed ${addSectionHovered ? V.primary : V.border}`,
+              borderRadius: V.r3,
+              backgroundColor: addSectionHovered ? V.bgHighlight : 'transparent',
+              color: addSectionHovered ? V.primary : V.textSecondary,
+              cursor: 'pointer',
+              fontSize: V.sm,
+              fontFamily: V.font,
+              fontWeight: 500,
+              transition: 'all 0.12s',
+              height: 'fit-content',
+            }}
+            onMouseEnter={() => setAddSectionHovered(true)}
+            onMouseLeave={() => setAddSectionHovered(false)}
+            title="Add section"
+          >
+            <IconPlus />
+            Add Section
+          </button>
+        </div>
       </div>
 
       {/* Content area */}
@@ -1518,6 +1617,8 @@ export function Canvas({
                     sortableSectionListeners={sortableProps.listeners}
                     sortableSectionStyle={sortableProps.style}
                     sortableSectionIsDragging={sortableProps.isDragging}
+                    isCollapsed={collapsedSections.has(section.id)}
+                    onToggleCollapse={toggleSectionCollapse}
                   />
                 )}
               </SortableItem>

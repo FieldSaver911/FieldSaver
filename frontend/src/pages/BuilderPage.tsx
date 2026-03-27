@@ -468,6 +468,7 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
   const [showPreview, setShowPreview] = React.useState(false);
   const [showSettings, setShowSettings] = React.useState(false);
   const [columnDrag, setColumnDrag] = React.useState<ColumnDrag | null>(null);
+  const [expandedPages, setExpandedPages] = React.useState<Set<string>>(new Set());
 
   // DnD setup
   const dndSensors = useDndSensors();
@@ -720,6 +721,37 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
     [columnDrag, activeSId, activeSection, updateSection, setActivePage, setActiveSection],
   );
 
+  const handleTogglePageExpand = React.useCallback((pageId: string) => {
+    setExpandedPages((prev) => {
+      const next = new Set(prev);
+      if (next.has(pageId)) {
+        next.delete(pageId);
+      } else {
+        next.add(pageId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleExpandAllPages = React.useCallback(() => {
+    setExpandedPages(new Set(pages.map(p => p.id)));
+  }, [pages]);
+
+  const handleCollapseAllPages = React.useCallback(() => {
+    setExpandedPages(new Set());
+  }, []);
+
+  // Auto-expand active page when it changes
+  React.useEffect(() => {
+    if (activePId) {
+      setExpandedPages((prev) => {
+        const next = new Set(prev);
+        next.add(activePId);
+        return next;
+      });
+    }
+  }, [activePId]);
+
 
   if (isLoading) {
     return (
@@ -785,6 +817,10 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
             onAddSection={handleSidebarAddSection}
             onDeleteSection={handleSidebarDeleteSection}
             columnDrag={columnDrag}
+            expandedPages={expandedPages}
+            onTogglePageExpand={handleTogglePageExpand}
+            onExpandAllPages={handleExpandAllPages}
+            onCollapseAllPages={handleCollapseAllPages}
           />
 
           {/* Center-Left: Field Types Sidebar */}
