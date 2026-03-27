@@ -6,8 +6,10 @@ import { Sidebar } from '../components/builder/Sidebar';
 import { FieldTypesSidebar } from '../components/builder/FieldTypesSidebar';
 import { Canvas, setPaletteDragActive } from '../components/builder/Canvas';
 import { SettingsPanel } from '../components/builder/SettingsPanel';
+import { FormSettingsPage } from '../components/settings/FormSettingsPage';
 import { PreviewModal } from '../components/preview/PreviewModal';
 import { useForm } from '../hooks/useForm';
+import { useFormStore } from '../stores/useFormStore';
 import { formsApi } from '../api/forms';
 
 // ─── TopBar ───────────────────────────────────────────────────────────────────
@@ -17,6 +19,7 @@ interface TopBarProps {
   onPreview: () => void;
   onSettings: () => void;
   onPublish: () => void;
+  onBack: () => void;
 }
 
 function TopBar({
@@ -24,6 +27,7 @@ function TopBar({
   onPreview,
   onSettings,
   onPublish,
+  onBack,
 }: TopBarProps) {
   return (
     <div
@@ -39,14 +43,48 @@ function TopBar({
         zIndex: 20,
       }}
     >
-      {/* Left section: Form icon and name */}
+      {/* Left section: Back button, form icon and name */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: V.s2,
+          gap: V.s3,
         }}
       >
+        {/* Back button */}
+        <button
+          type="button"
+          onClick={onBack}
+          title="Back to form manager"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '32px',
+            height: '32px',
+            border: 'none',
+            borderRadius: V.r2,
+            backgroundColor: 'transparent',
+            color: V.textSecondary,
+            cursor: 'pointer',
+            transition: 'all 0.12s',
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = V.bgHover;
+            e.currentTarget.style.color = V.primary;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.color = V.textSecondary;
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10 13L3 8l7-5"/>
+            <line x1="3" y1="8" x2="13" y2="8"/>
+          </svg>
+        </button>
+
         {/* Form icon */}
         <div
           style={{
@@ -424,8 +462,10 @@ interface ColumnDrag {
 function BuilderPageInner({ formId }: BuilderPageInnerProps) {
   const navigate = useNavigate();
   const [showPreview, setShowPreview] = React.useState(false);
+  const [showSettings, setShowSettings] = React.useState(false);
   const [columnDrag, setColumnDrag] = React.useState<ColumnDrag | null>(null);
 
+  const form = useFormStore((s) => s.form);
   const {
     isLoading,
     loadError,
@@ -472,6 +512,27 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
     setShowPreview(true);
   };
 
+  const handleSaveSettings = React.useCallback(
+    async (settings: any) => {
+      const updateSettings = useFormStore.getState().updateSettings;
+      updateSettings(settings);
+      await save();
+      setShowSettings(false);
+    },
+    [save],
+  );
+
+  const handleStatusChange = React.useCallback(
+    async (status: any) => {
+      try {
+        await formsApi.update(formId, { status });
+      } catch {
+        // handle silently; TODO: toast
+      }
+    },
+    [formId],
+  );
+
   const handleUpdateField = React.useCallback(
     (patch: Partial<Field>) => {
       if (selectedFieldId) updateField(selectedFieldId, patch);
@@ -484,6 +545,13 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
       if (activePId) updatePage(activePId, patch);
     },
     [activePId, updatePage],
+  );
+
+  const handleUpdateSectionSettings = React.useCallback(
+    (patch: Partial<Section>) => {
+      if (activeSId && activePId) updateSection(activeSId, patch);
+    },
+    [activeSId, activePId, updateSection],
   );
 
   const handleAddRowForActiveSection = React.useCallback(
@@ -526,13 +594,6 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
       updateSection(activeSId, { rows: updatedRows });
     },
     [activeSId, activeSection, updateSection],
-  );
-
-  const handleUpdateSection = React.useCallback(
-    (secId: string, patch: Partial<Section>) => {
-      updateSection(secId, patch);
-    },
-    [updateSection],
   );
 
   // Select first section when changing to a new section
@@ -580,10 +641,9 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
 
   const handleSidebarAddSection = React.useCallback(
     (pageId: string) => {
-      setActivePage(pageId);
-      addSection();
+      addSection(pageId);
     },
-    [setActivePage, addSection],
+    [addSection],
   );
 
   const handleColumnDropToSection = React.useCallback(
@@ -680,8 +740,9 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
       <TopBar
         formName={formName}
         onPreview={handlePreview}
-        onSettings={() => {/* TODO: open form settings */}}
+        onSettings={() => setShowSettings(true)}
         onPublish={handlePublish}
+        onBack={() => navigate('/forms')}
       />
 
       {/* Three-panel body */}
@@ -704,7 +765,6 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
           onRenamePage={renamePage}
           onAddSection={handleSidebarAddSection}
           onDeleteSection={handleSidebarDeleteSection}
-          onUpdateSection={handleUpdateSection}
           columnDrag={columnDrag}
         />
 
@@ -741,48 +801,27 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
         <SettingsPanel
           selectedField={selectedField}
           activePage={activePage ? { id: activePage.id, title: activePage.title, description: activePage.description, sections: activePage.sections } : null}
+          activeSection={activeSection}
           onUpdateField={handleUpdateField}
           onUpdatePage={handleUpdatePage}
+          onUpdateSection={handleUpdateSectionSettings}
         />
       </div>
 
+      {/* Settings Modal */}
+      {showSettings && form && (
+        <FormSettingsPage
+          form={form}
+          onBack={() => setShowSettings(false)}
+          onSave={handleSaveSettings}
+          onStatusChange={handleStatusChange}
+        />
+      )}
+
       {/* Preview Modal */}
-      {showPreview && (
+      {showPreview && form && (
         <PreviewModal
-          form={{
-            id: formId,
-            userId: 'current-user-id',
-            name: formName,
-            description: activePage?.description || '',
-            data: {
-              pages,
-              libraries: [],
-              narrativeTemplates: [],
-            },
-            settings: {
-              submitLabel: 'Submit',
-              successMessage: 'Thank you! Your response has been submitted.',
-              redirectUrl: '',
-              showProgress: true,
-              allowDraft: false,
-              formLayout: 'progress',
-              brandColor: '',
-              showPageNumbers: false,
-              mondayBoardId: '',
-              mondayGroupId: '',
-              webhookUrl: '',
-              notifyEmails: '',
-              dateFormat: 'MM/DD/YYYY',
-              emptyFieldHandling: 'omit',
-              retentionDays: 90,
-            },
-            status: formStatus as any,
-            publishedAt: null,
-            version: 1,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            deletedAt: null,
-          }}
+          form={form}
           onClose={() => setShowPreview(false)}
         />
       )}
