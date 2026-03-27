@@ -509,9 +509,19 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
   const handleUpdateRowCb = React.useCallback(
     (rowId: string, patch: Partial<Row>) => {
       if (!activeSId || !activeSection) return;
-      const updatedRows = activeSection.rows.map((row) =>
-        row.id === rowId ? { ...row, ...patch } : row
-      );
+      const updatedRows = activeSection.rows.map((row) => {
+        if (row.id !== rowId) return row;
+
+        // When preset changes, rebuild cells to match new column count
+        if (patch.preset) {
+          const newCells = patch.preset.cols.map((_, i) =>
+            row.cells[i] || { id: crypto.randomUUID(), fields: [] }
+          );
+          return { ...row, ...patch, cells: newCells };
+        }
+
+        return { ...row, ...patch };
+      });
       updateSection(activeSId, { rows: updatedRows });
     },
     [activeSId, activeSection, updateSection],
