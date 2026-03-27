@@ -277,32 +277,7 @@ function CellView({
           gap: V.s1,
         }}
       >
-        {/* Pill badge */}
-        <span
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
-            padding: '2px 8px',
-            borderRadius: V.rFull,
-            backgroundColor: V.bgSurface,
-            border: `1px solid ${V.borderLight}`,
-            fontSize: V.xs,
-            color: V.textSecondary,
-            fontFamily: V.font,
-            fontWeight: 500,
-            lineHeight: '18px',
-            cursor: 'default',
-            userSelect: 'none',
-          }}
-        >
-          <span style={{ color: V.textDisabled, display: 'flex', alignItems: 'center' }}>
-            <IconGrid />
-          </span>
-          {badgeLabel}
-        </span>
-
-        {/* Column drag handle */}
+        {/* Column drag handle — far left */}
         <button
           type="button"
           onMouseDown={handleColumnDragStart}
@@ -333,6 +308,34 @@ function CellView({
         >
           ⠿
         </button>
+
+        {/* Pill badge */}
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '2px 8px',
+            borderRadius: V.rFull,
+            backgroundColor: V.bgSurface,
+            border: `1px solid ${V.borderLight}`,
+            fontSize: V.xs,
+            color: V.textSecondary,
+            fontFamily: V.font,
+            fontWeight: 500,
+            lineHeight: '18px',
+            cursor: 'default',
+            userSelect: 'none',
+          }}
+        >
+          <span style={{ color: V.textDisabled, display: 'flex', alignItems: 'center' }}>
+            <IconGrid />
+          </span>
+          {badgeLabel}
+        </span>
+
+        {/* Spacer */}
+        <div style={{ flex: 1 }} />
 
         {/* Delete cell button */}
         <button
