@@ -981,6 +981,12 @@ interface SectionViewProps {
   onColumnDragStart?: (payload: ColumnDrag) => void;
   onColumnDropToSection?: (pageId: string, secId: string) => void;
   onMoveRow?: (fromPageId: string, fromSectionId: string, fromRowId: string, toPageId: string, toSectionId: string, toInsertIndex: number) => void;
+  // DnD props from SortableItem (optional, for section reorder)
+  setSortableSectionRef?: (element: HTMLElement | null) => void;
+  sortableSectionAttributes?: Record<string, any>;
+  sortableSectionListeners?: Record<string, any>;
+  sortableSectionStyle?: React.CSSProperties;
+  sortableSectionIsDragging?: boolean;
 }
 
 function SectionView({
@@ -1003,6 +1009,11 @@ function SectionView({
   onColumnDragStart,
   onColumnDropToSection,
   onMoveRow,
+  setSortableSectionRef,
+  sortableSectionAttributes,
+  sortableSectionListeners,
+  sortableSectionStyle,
+  sortableSectionIsDragging,
 }: SectionViewProps) {
   const [collapsed, setCollapsed] = React.useState(false);
   const [showRowMenu, setShowRowMenu] = React.useState(false);
@@ -1017,6 +1028,9 @@ function SectionView({
 
   return (
     <div
+      ref={setSortableSectionRef}
+      {...sortableSectionAttributes}
+      {...sortableSectionListeners}
       style={{
         marginBottom: V.s4,
         border: `1.5px solid ${V.borderLight}`,
@@ -1024,6 +1038,8 @@ function SectionView({
         backgroundColor: V.bgSurface,
         boxShadow: V.shadow1,
         overflow: 'hidden',
+        ...sortableSectionStyle,
+        opacity: sortableSectionIsDragging ? 0.4 : 1,
       }}
       onClick={() => onSelectSection(section.id)}
     >
@@ -1449,29 +1465,50 @@ export function Canvas({
             </div>
           </div>
         ) : (
-          activePage.sections.map((section) => (
-            <SectionView
-              key={section.id}
-              section={section}
-              pageId={activePageId ?? ''}
-              selectedFieldId={selectedFieldId}
-              onSelectSection={onSelectSection}
-              onSelectField={onSelectField}
-              onDeleteField={onDeleteField}
-              onDeleteRow={onDeleteRow}
-              onDeleteSection={onDeleteSection}
-              onAddRow={onAddRow}
-              onAddFieldToCell={onAddFieldToCell}
-              onUpdateSection={onUpdateSection}
-              onUpdateRow={onUpdateRow}
-              dragState={dragState}
-              onCanvasDragStart={handleCanvasDragStart}
-              onCanvasDrop={handleCanvasDrop}
-              onCanvasDragEnd={handleCanvasDragEnd}
-              onColumnDragStart={onColumnDragStart}
-              onColumnDropToSection={onColumnDropToSection}
-            />
-          ))
+          <SortableContext
+            items={activePage.sections.map(s => s.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            {activePage.sections.map((section) => (
+              <SortableItem
+                key={section.id}
+                id={section.id}
+                data={{
+                  kind: 'section',
+                  sectionId: section.id,
+                  pageId: activePageId ?? '',
+                }}
+              >
+                {(sortableProps) => (
+                  <SectionView
+                    section={section}
+                    pageId={activePageId ?? ''}
+                    selectedFieldId={selectedFieldId}
+                    onSelectSection={onSelectSection}
+                    onSelectField={onSelectField}
+                    onDeleteField={onDeleteField}
+                    onDeleteRow={onDeleteRow}
+                    onDeleteSection={onDeleteSection}
+                    onAddRow={onAddRow}
+                    onAddFieldToCell={onAddFieldToCell}
+                    onUpdateSection={onUpdateSection}
+                    onUpdateRow={onUpdateRow}
+                    dragState={dragState}
+                    onCanvasDragStart={handleCanvasDragStart}
+                    onCanvasDrop={handleCanvasDrop}
+                    onCanvasDragEnd={handleCanvasDragEnd}
+                    onColumnDragStart={onColumnDragStart}
+                    onColumnDropToSection={onColumnDropToSection}
+                    setSortableSectionRef={sortableProps.setNodeRef}
+                    sortableSectionAttributes={sortableProps.attributes}
+                    sortableSectionListeners={sortableProps.listeners}
+                    sortableSectionStyle={sortableProps.style}
+                    sortableSectionIsDragging={sortableProps.isDragging}
+                  />
+                )}
+              </SortableItem>
+            ))}
+          </SortableContext>
         )}
       </div>
     </div>
