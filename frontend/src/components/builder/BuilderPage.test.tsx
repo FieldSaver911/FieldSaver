@@ -44,6 +44,7 @@ function makeUseFormReturn(overrides: Partial<UseFormReturn> = {}): UseFormRetur
     updateField: vi.fn(),
     deleteField: vi.fn(),
     moveField: vi.fn(),
+    moveFieldToSection: vi.fn(),
     addRow: vi.fn(),
     deleteRow: vi.fn(),
     setRows: vi.fn(),

@@ -4,8 +4,6 @@ import { V } from '../../constants/design';
 export interface DragOverlayContentProps {
   activeItem: DragItemData | null;
   rowLabel?: string;
-  sectionTitle?: string;
-  rowCount?: number;
 }
 
 /**
@@ -15,8 +13,6 @@ export interface DragOverlayContentProps {
 export function DragOverlayContent({
   activeItem,
   rowLabel = 'Row',
-  sectionTitle = 'Section',
-  rowCount = 0,
 }: DragOverlayContentProps) {
   if (!activeItem) return null;
 
@@ -26,9 +22,13 @@ export function DragOverlayContent({
     padding: '12px',
     borderRadius: '4px',
     boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-    minWidth: '150px',
+    width: '140px',
     cursor: 'grabbing',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   };
+
 
   if (activeItem.kind === 'row') {
     return (
@@ -42,10 +42,15 @@ export function DragOverlayContent({
   if (activeItem.kind === 'section') {
     return (
       <div style={baseStyle}>
-        <div style={{ fontSize: '12px', fontWeight: 'bold' }}>{sectionTitle}</div>
-        <div style={{ fontSize: '11px', marginTop: '4px', opacity: 0.8 }}>
-          {rowCount} row{rowCount !== 1 ? 's' : ''}
-        </div>
+        <div style={{ fontSize: '12px', fontWeight: 'bold' }}>Moving Section</div>
+      </div>
+    );
+  }
+
+  if (activeItem.kind === 'page') {
+    return (
+      <div style={baseStyle}>
+        <div style={{ fontSize: '12px', fontWeight: 'bold' }}>Moving Page</div>
       </div>
     );
   }

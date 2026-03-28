@@ -17,6 +17,7 @@ export function useFormDnd() {
   const moveRow = useFormStore((state) => state.moveRow);
   const moveSection = useFormStore((state) => state.moveSection);
   const moveColumn = useFormStore((state) => state.moveColumn);
+  const reorderPages = useFormStore((state) => state.reorderPages);
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     // Set active item for DragOverlay preview
@@ -82,31 +83,48 @@ export function useFormDnd() {
         }
       }
 
-      // Section drag handling
-      if (activeData.kind === 'section' && (overData?.kind === 'section' || overData?.accepts === 'section')) {
+      // Section drag handling — flat list: section can land on section, sentinel, or page header
+      if (activeData.kind === 'section') {
         const fromPageId = activeData.pageId;
         const fromSectionId = activeData.sectionId;
-        const toPageId = overData.pageId;
 
-        // Same page reorder: use over.id (which is a section ID) to determine insert position
-        if (fromPageId === toPageId) {
-          const page = form.data.pages.find((p) => p.id === fromPageId);
+        // Case 1: Dropped on another section (same-page reorder OR cross-page insert)
+        if (overData?.kind === 'section') {
+          const toPageId = overData.pageId;
 
-          if (page && over.id !== fromSectionId) {
-            const fromIndex = page.sections.findIndex((s) => s.id === fromSectionId);
-            const toIndex = page.sections.findIndex((s) => s.id === over.id);
-
-            // Only move if indices differ
-            if (fromIndex !== toIndex) {
-              // Insert at the target section position
-              const insertIndex = fromIndex < toIndex ? toIndex : toIndex;
-              moveSection(fromPageId, fromSectionId, toPageId, insertIndex);
+          if (fromPageId === toPageId) {
+            const page = form.data.pages.find((p) => p.id === fromPageId);
+            if (page && over.id !== fromSectionId) {
+              const fromIndex = page.sections.findIndex((s) => s.id === fromSectionId);
+              const toIndex = page.sections.findIndex((s) => s.id === over.id);
+              if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
+                moveSection(fromPageId, fromSectionId, toPageId, toIndex);
+              }
             }
+          } else {
+            const targetPage = form.data.pages.find((p) => p.id === toPageId);
+            const toIndex = targetPage?.sections.findIndex((s) => s.id === over.id) ?? 0;
+            moveSection(fromPageId, fromSectionId, toPageId, Math.max(0, toIndex));
           }
-        } else {
-          // Cross-page move — use insertIndex from drop zone (Page level sentinel)
-          const toInsertIndex = overData.insertIndex ?? 0;
+        }
+
+        // Case 2: Dropped on SectionDropSentinel (collapsed page — append)
+        else if (overData?.accepts === 'section') {
+          const toPageId = overData.pageId;
+          const targetPage = form.data.pages.find((p) => p.id === toPageId);
+          const toInsertIndex = targetPage?.sections.length ?? 0;
           moveSection(fromPageId, fromSectionId, toPageId, toInsertIndex);
+        }
+
+        // Case 3: Dropped on a page header row — append to end of that page
+        else if (overData?.kind === 'page') {
+          const toPageId = overData.pageId;
+          if (fromPageId !== toPageId) {
+            const targetPage = form.data.pages.find((p) => p.id === toPageId);
+            const toInsertIndex = targetPage?.sections.length ?? 0;
+            moveSection(fromPageId, fromSectionId, toPageId, toInsertIndex);
+          }
+          // Same page header drop → no-op
         }
       }
 
@@ -127,12 +145,27 @@ export function useFormDnd() {
         }
       }
 
+      // Page drag handling
+      if (activeData.kind === 'page' && overData?.kind === 'page') {
+        const fromPageId = activeData.pageId;
+        const toPageId = overData.pageId;
+
+        if (fromPageId !== toPageId) {
+          const fromIndex = form.data.pages.findIndex((p) => p.id === fromPageId);
+          const toIndex = form.data.pages.findIndex((p) => p.id === toPageId);
+
+          if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
+            reorderPages(fromIndex, toIndex);
+          }
+        }
+      }
+
       // Field drag handling (within-section field reorder will be handled by Canvas dragState for now)
       // This is a placeholder for future @dnd-kit field drag integration
 
       setActiveItem(null);
     },
-    [form, activePId, moveRow, moveSection, moveColumn]
+    [form, activePId, moveRow, moveSection, moveColumn, reorderPages]
   );
 
   const handleDragCancel = useCallback(() => {

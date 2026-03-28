@@ -776,6 +776,42 @@ function FormTab() {
         <div style={{ fontSize: V.sm, fontWeight: 700, color: V.textSecondary, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: V.s3, fontFamily: V.font }}>
           Display
         </div>
+
+        {/* Layout selector */}
+        <div style={{ marginBottom: V.s3 }}>
+          <label style={{ display: 'block', fontSize: V.sm, fontWeight: 600, color: V.textSecondary, marginBottom: V.s2, fontFamily: V.font }}>
+            Form Layout
+          </label>
+          <div style={{ display: 'flex', gap: V.s2 }}>
+            {[
+              { value: 'progress', label: 'Progress' },
+              { value: 'single-page', label: 'Single Page' },
+              { value: 'side-nav', label: 'Side Nav' },
+            ].map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => updateSettings({ formLayout: option.value as any })}
+                style={{
+                  flex: 1,
+                  padding: `${V.s2} ${V.s3}`,
+                  border: `1px solid ${settings.formLayout === option.value ? V.primary : V.border}`,
+                  borderRadius: V.r2,
+                  backgroundColor: settings.formLayout === option.value ? V.primary : V.bgSurface,
+                  color: settings.formLayout === option.value ? '#ffffff' : V.textPrimary,
+                  cursor: 'pointer',
+                  fontSize: V.sm,
+                  fontWeight: settings.formLayout === option.value ? 600 : 400,
+                  fontFamily: V.font,
+                  transition: 'all 0.12s',
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <ToggleRow
           label="Show progress bar"
           checked={settings.showProgress}

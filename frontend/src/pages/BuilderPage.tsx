@@ -470,12 +470,20 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
   const [columnDrag, setColumnDrag] = React.useState<ColumnDrag | null>(null);
   const [expandedPages, setExpandedPages] = React.useState<Set<string>>(new Set());
 
+  // Load form state from store
+  const form = useFormStore((s) => s.form);
+
+  // Initialize all pages as expanded by default (once form loads)
+  React.useEffect(() => {
+    if (form?.data.pages) {
+      setExpandedPages(new Set(form.data.pages.map(p => p.id)));
+    }
+  }, [form]);
+
   // DnD setup
   const dndSensors = useDndSensors();
   const { activeItem, handleDragStart, handleDragOver, handleDragEnd, handleDragCancel } =
     useFormDnd();
-
-  const form = useFormStore((s) => s.form);
   const {
     isLoading,
     loadError,
@@ -741,6 +749,22 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
     setExpandedPages(new Set());
   }, []);
 
+  const handleMoveSectionToPage = React.useCallback(
+    (fromPageId: string, sectionId: string, toPageId: string, insertIndex: number) => {
+      const moveSection = useFormStore.getState().moveSection;
+      moveSection(fromPageId, sectionId, toPageId, insertIndex);
+    },
+    [],
+  );
+
+  const handleMoveRow = React.useCallback(
+    (fromPageId: string, fromSectionId: string, fromRowId: string, toPageId: string, toSectionId: string, toInsertIndex: number) => {
+      const moveRow = useFormStore.getState().moveRow;
+      moveRow(fromPageId, fromSectionId, fromRowId, toPageId, toSectionId, toInsertIndex);
+    },
+    [],
+  );
+
   // Auto-expand active page when it changes
   React.useEffect(() => {
     if (activePId) {
@@ -850,6 +874,9 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
             onColumnDragStart={setColumnDrag}
             onColumnDropToSection={handleColumnDropToSection}
             columnDrag={columnDrag}
+            pages={pages}
+            onMoveSectionToPage={handleMoveSectionToPage}
+            onMoveRow={handleMoveRow}
           />
 
           {/* Right: Settings panel */}
@@ -863,10 +890,23 @@ function BuilderPageInner({ formId }: BuilderPageInnerProps) {
           />
         </div>
 
-        {/* DragOverlay for visual feedback */}
-        <DragOverlay>
-          <DragOverlayContent activeItem={activeItem} />
-        </DragOverlay>
+        {/* DragOverlay for visual feedback - constrained to sidebar area */}
+        <div
+          style={{
+            pointerEvents: 'none',
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '200px',
+            height: '100vh',
+            clipPath: 'inset(0 calc(100% - 200px) 0 0)',
+            zIndex: 999,
+          }}
+        >
+          <DragOverlay>
+            <DragOverlayContent activeItem={activeItem} />
+          </DragOverlay>
+        </div>
       </DndContext>
 
       {/* Settings Modal */}

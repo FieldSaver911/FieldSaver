@@ -31,6 +31,7 @@ interface FormStore {
   addPage: () => void;
   deletePage: (pageId: string) => void;
   renamePage: (pageId: string, title: string) => void;
+  reorderPages: (fromIndex: number, toIndex: number) => void;
 
   // Actions — sections
   patchSection: (pageId: string, secId: string, patch: Partial<Section>) => void;
@@ -210,6 +211,17 @@ export const useFormStore = create<FormStore>((set, get) => ({
   },
 
   renamePage: (pageId: string, title: string) => get().patchPage(pageId, { title }),
+
+  reorderPages: (fromIndex: number, toIndex: number) => {
+    set((state) => {
+      if (!state.form || fromIndex === toIndex) return {};
+      const pages = [...state.form.data.pages];
+      const [movedPage] = pages.splice(fromIndex, 1);
+      pages.splice(toIndex, 0, movedPage);
+      const form = { ...state.form, data: { ...state.form.data, pages } };
+      return { form, isDirty: true };
+    });
+  },
 
   patchSection: (pageId: string, secId: string, patch: Partial<Section>) => {
     set((state) => {

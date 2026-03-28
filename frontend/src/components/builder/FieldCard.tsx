@@ -17,7 +17,7 @@ export interface FieldCardProps {
   /** Drag handler provided by parent row/canvas */
   onDragStart?: (cellId: string, index: number) => void;
   onDragEnter?: (cellId: string, index: number) => void;
-  onDrop?: () => void;
+  onDrop?: (event: React.DragEvent) => void;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -72,7 +72,7 @@ export function FieldCard({
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    onDrop?.();
+    onDrop?.(e);
   };
 
   const borderColor = isSelected ? V.primary : isHovered ? V.border : V.borderLight;

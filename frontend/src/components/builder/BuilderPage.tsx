@@ -94,6 +94,7 @@ export function BuilderPage({ formId }: BuilderPageProps) {
         onSelectField={form.setSelectedField}
         onDeleteField={form.deleteField}
         onMoveField={form.moveField}
+        onMoveFieldToSection={form.moveFieldToSection}
       />
 
       {/* Right settings panel */}

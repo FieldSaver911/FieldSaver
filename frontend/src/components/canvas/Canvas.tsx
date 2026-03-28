@@ -11,6 +11,7 @@ export interface CanvasProps {
   onSelectField: (fieldId: string | null) => void;
   onDeleteField: (fieldId: string) => void;
   onMoveField: (fromCellId: string, fromIdx: number, toCellId: string, toIdx: number) => void;
+  onMoveFieldToSection?: (fromCellId: string, fromIdx: number, toSectionId: string) => void;
 }
 
 // ─── DragState tracked locally ────────────────────────────────────────────────
@@ -28,6 +29,7 @@ export function Canvas({
   onSelectField,
   onDeleteField,
   onMoveField,
+  onMoveFieldToSection,
 }: CanvasProps) {
   const dragRef = React.useRef<DragRef | null>(null);
   const [dragOver, setDragOver] = React.useState<DragRef | null>(null);
@@ -40,15 +42,36 @@ export function Canvas({
     setDragOver({ cellId, index });
   }, []);
 
-  const handleDrop = React.useCallback(() => {
+  const handleDrop = React.useCallback((event: React.DragEvent) => {
     const from = dragRef.current;
-    const to = dragOver;
-    if (!from || !to) return;
-    if (from.cellId === to.cellId && from.index === to.index) return;
-    onMoveField(from.cellId, from.index, to.cellId, to.index);
+    if (!from) return;
+
+    // Check if dropped on a sidebar section
+    const els = document.elementsFromPoint(event.clientX, event.clientY);
+    let droppedOnSection = false;
+    for (const el of els) {
+      const secId = (el as HTMLElement).dataset.dropSecId;
+      if (secId && onMoveFieldToSection) {
+        // Only move to a different section
+        if (secId !== section?.id) {
+          onMoveFieldToSection(from.cellId, from.index, secId);
+          droppedOnSection = true;
+        }
+        break;
+      }
+    }
+
+    // If not dropped on sidebar section, use normal within-section move
+    if (!droppedOnSection) {
+      const to = dragOver;
+      if (!to) return;
+      if (from.cellId === to.cellId && from.index === to.index) return;
+      onMoveField(from.cellId, from.index, to.cellId, to.index);
+    }
+
     dragRef.current = null;
     setDragOver(null);
-  }, [dragOver, onMoveField]);
+  }, [dragOver, onMoveField, onMoveFieldToSection, section?.id]);
 
   const handleCanvasClick = React.useCallback(() => {
     onSelectField(null);

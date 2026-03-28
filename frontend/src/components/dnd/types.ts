@@ -5,6 +5,7 @@ import type { Field } from '@fieldsaver/shared';
  * Extended in future for library rows, data elements, etc.
  */
 export type DragItemData =
+  | { kind: 'page'; pageId: string }
   | { kind: 'row'; rowId: string; sectionId: string; pageId: string }
   | { kind: 'section'; sectionId: string; pageId: string }
   | {

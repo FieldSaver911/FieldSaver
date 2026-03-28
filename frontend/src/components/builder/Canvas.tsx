@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import type { Row, Section, Cell, Field, ColPreset, Page } from '@fieldsaver/shared';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
@@ -95,6 +96,245 @@ function IconRepeat() {
       <path d="M3 4h10v3l2-2-2-2v3"/>
       <path d="M13 12H3v-3l-2 2 2 2v-3"/>
     </svg>
+  );
+}
+
+// ─── SectionMovePicker ────────────────────────────────────────────────────────
+
+interface SectionMovePickerProps {
+  pages: Page[];
+  fromPageId: string;
+  anchorRect: DOMRect;
+  onMove: (toPageId: string) => void;
+  onClose: () => void;
+}
+
+function SectionMovePicker({
+  pages,
+  fromPageId,
+  anchorRect,
+  onMove,
+  onClose,
+}: SectionMovePickerProps) {
+  const otherPages = pages.filter((p) => p.id !== fromPageId);
+
+  return createPortal(
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9998,
+        }}
+      />
+      {/* Panel */}
+      <div
+        style={{
+          position: 'fixed',
+          top: anchorRect.bottom + 4,
+          left: anchorRect.left,
+          zIndex: 9999,
+          backgroundColor: V.bgSurface,
+          border: `1px solid ${V.borderLight}`,
+          borderRadius: V.r2,
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.12)',
+          minWidth: '180px',
+        }}
+      >
+        <div style={{ padding: V.s3 }}>
+          <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: V.s2, color: V.textSecondary }}>
+            Move to page
+          </div>
+          {otherPages.length === 0 ? (
+            <div style={{ fontSize: '12px', color: V.textSecondary, padding: `${V.s2} 0` }}>
+              No other pages
+            </div>
+          ) : (
+            <div>
+              {otherPages.map((page) => (
+                <button
+                  key={page.id}
+                  onClick={() => {
+                    onMove(page.id);
+                    onClose();
+                  }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: `${V.s2} ${V.s3}`,
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    color: V.textPrimary,
+                    borderRadius: V.r2,
+                    transition: 'background-color 0.12s',
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.backgroundColor = V.bgHighlight;
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
+                  }}
+                >
+                  {page.title || 'Untitled Page'}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </>,
+    document.body
+  );
+}
+
+// ─── RowMovePicker ────────────────────────────────────────────────────────────
+
+interface RowMovePickerProps {
+  pages: Page[];
+  fromSectionId: string;
+  anchorRect: DOMRect;
+  onMove: (toPageId: string, toSectionId: string, toIndex: number) => void;
+  onClose: () => void;
+}
+
+function RowMovePicker({
+  pages,
+  fromSectionId,
+  anchorRect,
+  onMove,
+  onClose,
+}: RowMovePickerProps) {
+  const [expandedPageId, setExpandedPageId] = React.useState<string | null>(null);
+
+  return createPortal(
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9998,
+        }}
+      />
+      {/* Panel */}
+      <div
+        style={{
+          position: 'fixed',
+          top: anchorRect.bottom + 4,
+          left: anchorRect.left,
+          zIndex: 9999,
+          backgroundColor: V.bgSurface,
+          border: `1px solid ${V.borderLight}`,
+          borderRadius: V.r2,
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.12)',
+          minWidth: '200px',
+          maxHeight: '320px',
+          overflowY: 'auto',
+        }}
+      >
+        <div style={{ padding: V.s3 }}>
+          <div style={{ fontSize: '12px', fontWeight: 600, marginBottom: V.s2, color: V.textSecondary }}>
+            Move row to section
+          </div>
+          {pages.length === 0 ? (
+            <div style={{ fontSize: '12px', color: V.textSecondary }}>No pages available</div>
+          ) : (
+            <div>
+              {pages.map((page) => (
+                <div key={page.id}>
+                  {/* Page label (non-interactive) */}
+                  <div
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      padding: `${V.s2} ${V.s3}`,
+                      color: V.textSecondary,
+                      textTransform: 'uppercase',
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                    onClick={() => setExpandedPageId(expandedPageId === page.id ? null : page.id)}
+                  >
+                    <span style={{ fontSize: '10px' }}>
+                      {expandedPageId === page.id ? '▼' : '▶'}
+                    </span>
+                    {page.title || 'Untitled Page'}
+                  </div>
+
+                  {/* Sections (shown when page is expanded) */}
+                  {expandedPageId === page.id && (
+                    <div>
+                      {page.sections.length === 0 ? (
+                        <div style={{ fontSize: '12px', color: V.textSecondary, padding: `${V.s2} ${V.s4}` }}>
+                          No sections
+                        </div>
+                      ) : (
+                        page.sections.map((section) => {
+                          const isCurrent = section.id === fromSectionId;
+                          return (
+                            <button
+                              key={section.id}
+                              onClick={() => {
+                                if (!isCurrent) {
+                                  onMove(page.id, section.id, section.rows.length);
+                                  onClose();
+                                }
+                              }}
+                              disabled={isCurrent}
+                              style={{
+                                display: 'block',
+                                width: '100%',
+                                textAlign: 'left',
+                                padding: `${V.s2} ${V.s4}`,
+                                backgroundColor: isCurrent ? V.bgHighlight : 'transparent',
+                                border: 'none',
+                                fontSize: '12px',
+                                cursor: isCurrent ? 'not-allowed' : 'pointer',
+                                color: isCurrent ? V.textSecondary : V.textPrimary,
+                                borderRadius: V.r2,
+                                transition: 'background-color 0.12s',
+                                opacity: isCurrent ? 0.6 : 1,
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!isCurrent) {
+                                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = V.bgHighlight;
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!isCurrent) {
+                                  (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent';
+                                }
+                              }}
+                            >
+                              {section.title || 'Untitled Section'}
+                              {isCurrent && (
+                                <span style={{ marginLeft: '8px', fontSize: '11px', color: V.textSecondary }}>
+                                  (current)
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </>,
+    document.body
   );
 }
 
@@ -500,6 +740,9 @@ interface RowViewProps {
   sortableListeners?: Record<string, any>;
   sortableStyle?: React.CSSProperties;
   sortableIsDragging?: boolean;
+  // Move row props
+  pages?: Page[];
+  onMoveRow?: (toPageId: string, toSectionId: string, toIndex: number) => void;
 }
 
 function RowView({
@@ -523,9 +766,13 @@ function RowView({
   sortableListeners,
   sortableStyle,
   sortableIsDragging,
+  pages = [],
+  onMoveRow,
 }: RowViewProps) {
   const [showLayoutPicker, setShowLayoutPicker] = React.useState(false);
   const [addColHovered, setAddColHovered] = React.useState(false);
+  const [movePicker, setMovePicker] = React.useState<DOMRect | null>(null);
+  const moveButtonRef = React.useRef<HTMLButtonElement>(null);
   const [delRowHovered, setDelRowHovered] = React.useState(false);
   const [buttonPosition, setButtonPosition] = React.useState<{ top: number; left: number; width: number } | null>(null);
 
@@ -784,6 +1031,37 @@ function RowView({
           {/* Spacer */}
           <div style={{ flex: 1 }} />
 
+          {/* Move row (only if there are other sections to move to) */}
+          {pages.length > 0 && pages.some((p) => p.sections.length > 0) && (
+            <button
+              ref={moveButtonRef}
+              type="button"
+              title="Move to another section"
+              style={{
+                ...ghostBtn,
+                color: V.textDisabled,
+                borderColor: V.borderLight,
+              }}
+              onClick={() => {
+                const rect = moveButtonRef.current?.getBoundingClientRect();
+                if (rect) setMovePicker(rect);
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.color = V.textSecondary;
+                (e.currentTarget as HTMLButtonElement).style.borderColor = V.border;
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.color = V.textDisabled;
+                (e.currentTarget as HTMLButtonElement).style.borderColor = V.borderLight;
+              }}
+            >
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 14L14 2M14 2L10.5 5.5M14 2L5.5 10.5"/>
+              </svg>
+              Move
+            </button>
+          )}
+
           {/* + Column ghost button */}
           <button
             type="button"
@@ -918,6 +1196,20 @@ function RowView({
         </div>
       </div>
 
+      {/* Row move picker portal */}
+      {movePicker && sectionId && (
+        <RowMovePicker
+          pages={pages}
+          fromSectionId={sectionId}
+          anchorRect={movePicker}
+          onMove={(toPageId, toSectionId, toIndex) => {
+            if (onMoveRow) {
+              onMoveRow(toPageId, toSectionId, toIndex);
+            }
+          }}
+          onClose={() => setMovePicker(null)}
+        />
+      )}
     </div>
   );
 }
@@ -990,6 +1282,9 @@ interface SectionViewProps {
   // Controlled collapse state
   isCollapsed?: boolean;
   onToggleCollapse?: (sectionId: string) => void;
+  // Move section props
+  pages?: Page[];
+  onMoveSectionToPage?: (fromPageId: string, sectionId: string, toPageId: string, insertIndex: number) => void;
 }
 
 function SectionView({
@@ -1019,12 +1314,16 @@ function SectionView({
   sortableSectionIsDragging,
   isCollapsed = false,
   onToggleCollapse,
+  pages = [],
+  onMoveSectionToPage,
 }: SectionViewProps) {
   const collapsed = isCollapsed;
   const [showRowMenu, setShowRowMenu] = React.useState(false);
   const [addRowHovered, setAddRowHovered] = React.useState(false);
   const [buttonPos, setButtonPos] = React.useState<{ top: number; left: number; width: number } | null>(null);
   const addRowButtonRef = React.useRef<HTMLButtonElement>(null);
+  const [movePicker, setMovePicker] = React.useState<DOMRect | null>(null);
+  const moveButtonRef = React.useRef<HTMLButtonElement>(null);
 
   const totalFields = section.rows.reduce(
     (acc, r) => acc + r.cells.reduce((a, c) => a + c.fields.length, 0),
@@ -1152,6 +1451,36 @@ function SectionView({
           <IconRepeat />
         </button>
 
+        {/* Move section (only if there are other pages) */}
+        {pages.length > 1 && (
+          <button
+            ref={moveButtonRef}
+            type="button"
+            title="Move to another page"
+            onClick={(e) => {
+              e.stopPropagation();
+              const rect = moveButtonRef.current?.getBoundingClientRect();
+              if (rect) setMovePicker(rect);
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+              color: V.textDisabled,
+              padding: `0 ${V.s1}`,
+              transition: 'color 0.12s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = V.primary; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = V.textDisabled; }}
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2 14L14 2M14 2L10.5 5.5M14 2L5.5 10.5"/>
+            </svg>
+          </button>
+        )}
+
         {/* Delete section */}
         <button
           type="button"
@@ -1217,6 +1546,12 @@ function SectionView({
                     sortableListeners={sortableProps.listeners}
                     sortableStyle={sortableProps.style}
                     sortableIsDragging={sortableProps.isDragging}
+                    pages={pages}
+                    onMoveRow={(toPageId, toSectionId, toIndex) => {
+                      if (onMoveRow) {
+                        onMoveRow(pageId, section.id, row.id, toPageId, toSectionId, toIndex);
+                      }
+                    }}
                   />
                 )}
               </SortableItem>
@@ -1286,6 +1621,22 @@ function SectionView({
           </div>
         </div>
       )}
+
+      {/* Section move picker portal */}
+      {movePicker && pages.length > 1 && (
+        <SectionMovePicker
+          pages={pages}
+          fromPageId={pageId}
+          anchorRect={movePicker}
+          onMove={(toPageId) => {
+            const toPage = pages.find(p => p.id === toPageId);
+            if (onMoveSectionToPage && toPage) {
+              onMoveSectionToPage(pageId, section.id, toPageId, toPage.sections.length);
+            }
+          }}
+          onClose={() => setMovePicker(null)}
+        />
+      )}
     </div>
   );
 }
@@ -1311,6 +1662,9 @@ export interface CanvasProps {
   onColumnDragStart?: (payload: ColumnDrag) => void;
   onColumnDropToSection?: (pageId: string, secId: string) => void;
   columnDrag?: ColumnDrag | null;
+  pages?: Page[];
+  onMoveSectionToPage?: (fromPageId: string, sectionId: string, toPageId: string, insertIndex: number) => void;
+  onMoveRow?: (fromPageId: string, fromSectionId: string, fromRowId: string, toPageId: string, toSectionId: string, toInsertIndex: number) => void;
 }
 
 export function Canvas({
@@ -1330,6 +1684,9 @@ export function Canvas({
   activePageId,
   onColumnDragStart,
   onColumnDropToSection,
+  pages = [],
+  onMoveSectionToPage,
+  onMoveRow,
 }: CanvasProps) {
   const [addSectionHovered, setAddSectionHovered] = React.useState(false);
   const [dragState, setDragState] = React.useState<DragState | null>(null);
@@ -1619,6 +1976,9 @@ export function Canvas({
                     sortableSectionIsDragging={sortableProps.isDragging}
                     isCollapsed={collapsedSections.has(section.id)}
                     onToggleCollapse={toggleSectionCollapse}
+                    pages={pages}
+                    onMoveSectionToPage={onMoveSectionToPage}
+                    onMoveRow={onMoveRow}
                   />
                 )}
               </SortableItem>

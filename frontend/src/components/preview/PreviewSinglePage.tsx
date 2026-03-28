@@ -176,6 +176,33 @@ function PageAccordionItem({
 
   const { total: pTotal, filled: pFilled } = countPageRequiredFields(page, fieldValues);
 
+  // Page-level expand/collapse for sections within this page
+  const expandPageSections = () => {
+    const pageUpdates: Record<string, boolean> = {};
+    page.sections?.forEach((section) => {
+      pageUpdates[section.id] = true;
+    });
+    // Update expandedSections state - we'll need to handle this in parent
+    Object.entries(pageUpdates).forEach(([sectionId]) => {
+      if (expandedSections[sectionId] !== true) {
+        onToggleSection(sectionId);
+      }
+    });
+  };
+
+  const collapsePageSections = () => {
+    page.sections?.forEach((section) => {
+      if (expandedSections[section.id] !== false) {
+        onToggleSection(section.id);
+      }
+    });
+  };
+
+  // Check if all sections in this page are expanded
+  const allPageSectionsExpanded = page.sections?.every(
+    (section) => expandedSections[section.id] !== false
+  ) ?? true;
+
   const requiredDotColor =
     pFilled === pTotal && pTotal > 0
       ? '#4caf50'
@@ -296,18 +323,84 @@ function PageAccordionItem({
           </button>
         )}
 
-        {/* Expand/Collapse Text */}
-        <div
-          style={{
-            fontSize: V.xs,
-            fontWeight: 700,
-            color: isOpen ? brandColor : V.textDisabled,
-            transition: 'color 0.2s',
-            flexShrink: 0,
-          }}
-        >
-          {isOpen ? 'Collapse' : 'Expand'}
-        </div>
+        {/* Page-level Expand/Collapse Section Buttons (only when page is open) */}
+        {isOpen && page.sections && page.sections.length > 0 && (
+          <div style={{ display: 'flex', gap: V.s2 }}>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                expandPageSections();
+              }}
+              style={{
+                background: allPageSectionsExpanded ? 'rgba(0,0,0,0.08)' : 'rgba(0,0,0,0.04)',
+                border: 'none',
+                color: V.textSecondary,
+                padding: '3px 8px',
+                borderRadius: V.r2,
+                cursor: 'pointer',
+                fontSize: V.xs,
+                fontWeight: 600,
+                fontFamily: V.font,
+                flexShrink: 0,
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(0,0,0,0.1)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = allPageSectionsExpanded ? 'rgba(0,0,0,0.08)' : 'rgba(0,0,0,0.04)';
+              }}
+              title="Expand all sections in this page"
+            >
+              Expand
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                collapsePageSections();
+              }}
+              style={{
+                background: !allPageSectionsExpanded ? 'rgba(0,0,0,0.08)' : 'rgba(0,0,0,0.04)',
+                border: 'none',
+                color: V.textSecondary,
+                padding: '3px 8px',
+                borderRadius: V.r2,
+                cursor: 'pointer',
+                fontSize: V.xs,
+                fontWeight: 600,
+                fontFamily: V.font,
+                flexShrink: 0,
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(0,0,0,0.1)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = !allPageSectionsExpanded ? 'rgba(0,0,0,0.08)' : 'rgba(0,0,0,0.04)';
+              }}
+              title="Collapse all sections in this page"
+            >
+              Collapse
+            </button>
+          </div>
+        )}
+
+        {/* Expand/Collapse Page Text (when page is closed) */}
+        {!isOpen && (
+          <div
+            style={{
+              fontSize: V.xs,
+              fontWeight: 700,
+              color: V.textDisabled,
+              transition: 'color 0.2s',
+              flexShrink: 0,
+            }}
+          >
+            Expand
+          </div>
+        )}
       </button>
 
       {/* Accordion Body */}
@@ -375,6 +468,37 @@ export function PreviewSinglePage({ form, onClose }: PreviewSinglePageProps) {
     setExpandedSections((prev) => ({ ...prev, [sectionId]: !prev[sectionId] }));
   };
 
+  // Expand/Collapse All functionality
+  const expandAll = () => {
+    // Expand all pages
+    const allPageIds: Record<string, boolean> = {};
+    pages.forEach((page) => {
+      allPageIds[page.id] = true;
+    });
+    setOpenPages(allPageIds);
+
+    // Expand all sections
+    const allSectionIds: Record<string, boolean> = {};
+    pages.forEach((page) => {
+      page.sections?.forEach((section) => {
+        allSectionIds[section.id] = true;
+      });
+    });
+    setExpandedSections(allSectionIds);
+  };
+
+  const collapseAll = () => {
+    setOpenPages({});
+    setExpandedSections({});
+  };
+
+  // Check if all pages and sections are expanded
+  const allPagesExpanded = pages.every((page) => openPages[page.id]);
+  const allSectionsExpanded = pages.every((page) =>
+    page.sections?.every((section) => expandedSections[section.id] !== false)
+  );
+  const allExpanded = allPagesExpanded && allSectionsExpanded;
+
   const { total: fTotal, filled: fFilled } = useMemo(
     () => countRequiredFields(pages, fieldValues),
     [pages, fieldValues]
@@ -437,6 +561,62 @@ export function PreviewSinglePage({ form, onClose }: PreviewSinglePageProps) {
             onClick={() => setShowRequiredDrawer(true)}
           />
         )}
+
+        {/* Expand All / Collapse All buttons */}
+        <div style={{ display: 'flex', gap: V.s2, flexShrink: 0 }}>
+          <button
+            type="button"
+            onClick={expandAll}
+            style={{
+              background: allExpanded ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.15)',
+              border: 'none',
+              color: '#fff',
+              padding: `${V.s1} ${V.s3}`,
+              borderRadius: V.r2,
+              cursor: 'pointer',
+              fontSize: V.xs,
+              fontWeight: 600,
+              fontFamily: V.font,
+              flexShrink: 0,
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.3)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = allExpanded ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.15)';
+            }}
+            title="Expand all pages and sections"
+          >
+            Expand All
+          </button>
+          <button
+            type="button"
+            onClick={collapseAll}
+            style={{
+              background: !allExpanded ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.25)',
+              border: 'none',
+              color: '#fff',
+              padding: `${V.s1} ${V.s3}`,
+              borderRadius: V.r2,
+              cursor: 'pointer',
+              fontSize: V.xs,
+              fontWeight: 600,
+              fontFamily: V.font,
+              flexShrink: 0,
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.3)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = !allExpanded ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.25)';
+            }}
+            title="Collapse all pages and sections"
+          >
+            Collapse All
+          </button>
+        </div>
 
         {/* Close button */}
         {onClose && (

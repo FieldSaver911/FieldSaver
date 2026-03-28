@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Field, Row, Section, Page, ColPreset } from '@fieldsaver/shared';
+import type { Field, Row, Section, Page, ColPreset, Cell } from '@fieldsaver/shared';
 import { useFormStore } from '../stores/useFormStore';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -34,6 +34,7 @@ export interface UseFormReturn {
   updateField: (fieldId: string, patch: Partial<Field>) => void;
   deleteField: (fieldId: string) => void;
   moveField: (fromCellId: string, fromIdx: number, toCellId: string, toIdx: number) => void;
+  moveFieldToSection: (fromCellId: string, fromIdx: number, toSectionId: string) => void;
 
   // Row mutations
   addRow: (sectionId: string, preset: ColPreset) => void;
@@ -303,6 +304,72 @@ export function useForm(formId: string): UseFormReturn {
     [activePId, activeSId, form, patchSection],
   );
 
+  const moveFieldToSection = React.useCallback(
+    (fromCellId: string, fromIdx: number, toSectionId: string): void => {
+      if (!activePId || !activeSId || !form) return;
+      const page = form.data.pages.find((p) => p.id === activePId);
+      if (!page) return;
+
+      // Find and extract the field from the source section
+      const sourceSection = page.sections.find((s) => s.id === activeSId);
+      if (!sourceSection) return;
+
+      let movingField: Field | null = null;
+      const sourceRows = sourceSection.rows.map((row) => ({
+        ...row,
+        cells: row.cells.map((cell) => {
+          if (cell.id !== fromCellId) return cell;
+          const fields = [...cell.fields];
+          const [removed] = fields.splice(fromIdx, 1);
+          movingField = removed;
+          return { ...cell, fields };
+        }),
+      }));
+
+      if (!movingField) return;
+
+      // Find the target section and add the field
+      const targetSection = page.sections.find((s) => s.id === toSectionId);
+      if (!targetSection) return;
+
+      // Add to first cell of first row, or create a new row if needed
+      let targetRows = [...targetSection.rows];
+      if (targetRows.length === 0) {
+        // Create a new row with a single cell
+        const newCell: Cell = {
+          id: `cell-${Date.now()}`,
+          fields: [movingField],
+        };
+        const newRow: Row = {
+          id: `row-${Date.now()}`,
+          preset: { label: '1', hint: '', cols: [12] },
+          cells: [newCell],
+        };
+        targetRows = [newRow];
+      } else {
+        // Add to first cell of first row
+        targetRows = targetRows.map((row, idx) => {
+          if (idx !== 0) return row;
+          return {
+            ...row,
+            cells: row.cells.map((cell, cellIdx) => {
+              if (cellIdx !== 0) return cell;
+              return {
+                ...cell,
+                fields: [...cell.fields, movingField!],
+              };
+            }),
+          };
+        });
+      }
+
+      // Update both sections
+      patchSection(activePId, activeSId, { rows: sourceRows });
+      patchSection(activePId, toSectionId, { rows: targetRows });
+    },
+    [activePId, activeSId, form, patchSection],
+  );
+
   // ── Row mutations ──────────────────────────────────────────────────────────
 
   const addRow = React.useCallback(
@@ -389,6 +456,7 @@ export function useForm(formId: string): UseFormReturn {
     updateField,
     deleteField,
     moveField,
+    moveFieldToSection,
 
     addRow,
     deleteRow,
